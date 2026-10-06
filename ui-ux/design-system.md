@@ -240,7 +240,10 @@ Dark mode is first-class: both themes ship in v1. Follow OS preference; staff ba
 
 | Document | Relationship |
 |----------|-------------|
+| `shadcn-tailwind.md` | Tailwind v4 `@theme` implementation of these tokens |
+| `shadcn-tailwindcss-custom-sizing.md` | Fluid type/spacing derived from these tokens |
 | `ui-components.md` | Component variants built from these tokens |
+| `design.md` | System design assembling components from these tokens |
 | `accessibility.md` | Contrast and interaction requirements |
 | `patterns-emergency-first.md` | Layout patterns for the 3-second rule |
 | `ui-generation-prompts/` | Stitch prompts encoding this system |

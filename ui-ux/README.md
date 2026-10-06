@@ -25,7 +25,10 @@ The interface standard for ruby-veterinary: design tokens (ruby + white brand wi
 | Document | Contents |
 |----------|----------|
 | [design-system.md](design-system.md) | Colours, typography, spacing, radius, shadow, motion, Tailwind tokens, light + dark |
-| [ui-components.md](ui-components.md) | Component variants, states, props, per-component accessibility |
+| [ui-components.md](ui-components.md) | Full component catalog — variants, sizes, states, props, a11y, domain-specific vet components |
+| [design.md](design.md) | UI/UX system design — navigation, public/owner/staff wireframes, responsive, animation |
+| [shadcn-tailwind.md](shadcn-tailwind.md) | Tailwind CSS 4 + shadcn/ui fixed `@theme` config, cva variants, token mapping |
+| [shadcn-tailwindcss-custom-sizing.md](shadcn-tailwindcss-custom-sizing.md) | Fluid sizing — `clamp()` type/spacing tokens for public surfaces |
 | [accessibility.md](accessibility.md) | WCAG 2.1 AA plan, contrast, keyboard, testing |
 | [patterns-emergency-first.md](patterns-emergency-first.md) | 3-second clarity patterns, degradation fallbacks |
 | [ui-generation-prompts/](ui-generation-prompts/) | Google Stitch prompt files (~57 screens) for mockup generation |
