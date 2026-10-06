@@ -195,7 +195,7 @@ The context map is considered correct when:
 | `domain-model.md` | Domains and entities these contexts own |
 | `domain-events.md` | Events exchanged across context boundaries |
 | `architectural-decision-record.md` | Decisions on monolith, database, and extraction criteria |
-| `strategic-architecture/` | Detailed context maps and architecture rules (planned) |
+| `strategic-architecture/` | Detailed context maps, event flows, and architecture rules |
 
 # Guiding Principle
 

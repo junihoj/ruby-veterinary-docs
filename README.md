@@ -55,15 +55,19 @@ This repository is the specification source of truth for the product. The implem
 |----------|---------|
 | [engineering-guidelines.md](engineering-guidelines.md) | Coding standards, workflows, quality gates, repository conventions |
 | [database/](database/) | Database architecture, migrations, performance, backup and recovery |
+| [data-model/](data-model/) | Per-context table models: entities, types, invariants, indexes |
+| [openapi/](openapi/) | OpenAPI 3.1 specs mirroring the API contract |
+| [strategic-architecture/](strategic-architecture/) | Context map, event flows, ownership matrices, architecture rules |
+| [ui-ux/](ui-ux/) | Design system, components, accessibility, emergency patterns, Stitch prompts |
 
 ### Supporting Directories
 
 | Directory | Purpose |
 |-----------|---------|
-| [data-model/](data-model/) | Detailed data model specifications (planned) |
-| [openapi/](openapi/) | OpenAPI YAML specifications (planned) |
-| [strategic-architecture/](strategic-architecture/) | Context maps and architecture rules (planned) |
-| [ui-ux/](ui-ux/) | Design system and UI specifications (planned) |
+| [data-model/](data-model/) | Detailed data model specifications |
+| [openapi/](openapi/) | OpenAPI YAML specifications |
+| [strategic-architecture/](strategic-architecture/) | Context maps and architecture rules |
+| [ui-ux/](ui-ux/) | Design system and UI specifications |
 
 ---
 
@@ -81,9 +85,11 @@ This repository is the specification source of truth for the product. The implem
 1. `architectural-decision-record.md` - why the stack is what it is
 2. `api-specification.md` - contracts between services
 3. `domain-model.md` and `bounded-context.md` - how the system is carved up
-4. `engineering-guidelines.md` - how we work
-5. `database/` - persistence decisions
-6. `deployment-architecture.md` - where everything runs and how it ships
+4. `strategic-architecture/` - context map, events, ownership, rules
+5. `engineering-guidelines.md` - how we work
+6. `database/` - persistence decisions
+7. `deployment-architecture.md` - where everything runs and how it ships
+8. `ui-ux/` - design system and emergency patterns
 
 ### For Product and Clinic Stakeholders
 
@@ -97,7 +103,7 @@ This repository is the specification source of truth for the product. The implem
 1. `user-personas.md` - personas and device usage
 2. `vision.md` section 7 - guiding principles
 3. `non-functional-requirements.md` section 3 - usability and accessibility
-4. `ui-ux/` - design system (planned)
+4. `ui-ux/` - design system, components, accessibility, emergency patterns
 
 ---
 
@@ -119,10 +125,11 @@ ruby-veterinary-docs/
 |-- deployment-architecture.md         # VPS topology, CI/CD, operations
 |-- engineering-guidelines.md          # Engineering standards
 |-- database/                          # Database architecture docs
-|-- data-model/                        # Per-domain data models (planned)
-|-- openapi/                           # OpenAPI specs (planned)
-|-- strategic-architecture/            # Architecture rules (planned)
-`-- ui-ux/                             # Design system (planned)
+|-- data-model/                        # Per-context data models
+|-- openapi/                           # OpenAPI 3.1 specs
+|-- strategic-architecture/            # Context map, events, ownership, rules
+|-- ui-ux/                             # Design system, components, a11y, prompts
+`-- diagrams/                          # Reserved for rendered diagrams (planned)
 ```
 
 ---

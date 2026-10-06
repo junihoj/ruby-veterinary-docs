@@ -219,7 +219,7 @@ The domain model is considered correct when:
 | `functional-requirements.md` | Feature source of truth this model must cover |
 | `domain-events.md` | Event catalog for cross-domain communication |
 | `bounded-context.md` | Context map, ownership, and integration patterns |
-| `data-model/` | Table-level design derived from these entities (planned) |
+| `data-model/` | Table-level design derived from these entities |
 | `architectural-decision-record.md` | Why a modular monolith with PostgreSQL was chosen |
 
 # Guiding Principle
