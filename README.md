@@ -46,6 +46,7 @@ This repository is the specification source of truth for the product. The implem
 | [domain-events.md](domain-events.md) | Domain event catalog and publisher/subscriber matrix |
 | [bounded-context.md](bounded-context.md) | Strategic context map, ownership, integration patterns |
 | [architectural-decision-record.md](architectural-decision-record.md) | Architecture decisions and their rationale |
+| [deployment-architecture.md](deployment-architecture.md) | Single-VPS topology, CI/CD, monitoring, and how the 99.9% target is met |
 | [api-specification.md](api-specification.md) | API conventions, endpoints, error model, webhooks |
 
 ### Engineering
@@ -82,6 +83,7 @@ This repository is the specification source of truth for the product. The implem
 3. `domain-model.md` and `bounded-context.md` - how the system is carved up
 4. `engineering-guidelines.md` - how we work
 5. `database/` - persistence decisions
+6. `deployment-architecture.md` - where everything runs and how it ships
 
 ### For Product and Clinic Stakeholders
 
@@ -114,6 +116,7 @@ ruby-veterinary-docs/
 |-- bounded-context.md                 # Strategic context map
 |-- architectural-decision-record.md   # ADRs
 |-- api-specification.md               # API contracts
+|-- deployment-architecture.md         # VPS topology, CI/CD, operations
 |-- engineering-guidelines.md          # Engineering standards
 |-- database/                          # Database architecture docs
 |-- data-model/                        # Per-domain data models (planned)

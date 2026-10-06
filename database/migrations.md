@@ -116,7 +116,7 @@ Destructive operations (drops, narrowing types) are only ever performed after th
 
 # CI/CD Integration
 
-Migrations are applied by the deploy pipeline as a distinct, observable step before the new application version becomes healthy. Failures halt the rollout; the platform keeps the previous version serving.
+Migrations are applied by the deploy pipeline as a distinct, observable step before the new application version becomes healthy (see `../deployment-architecture.md`). Failures halt the rollout; the previous containers keep serving.
 
 # Schema Drift
 

@@ -48,7 +48,7 @@ Parent repository pins all three as submodules. A change spanning repositories i
 3. Tests pass locally with `pnpm lint`, `pnpm test` (API) or `pnpm lint` (front end)
 4. Pull request referencing the requirement or ADR it satisfies
 5. Review against the checklist below; merge with squash
-6. Deploy through CI to the managed platform
+6. Deploy through CI to the single VPS (SSH: build, compose up, health check - see `deployment-architecture.md`)
 
 # Branching Strategy
 
@@ -194,7 +194,7 @@ Minimum gate: any change to pharmacy, payments, or emergency-path code requires 
 - Card data never accepted, stored, or logged (ADR-0007)
 - Uploads restricted by type and size, stored in private object storage, served via short-lived signed URLs (ADR-0009)
 - Webhook signatures verified before any parsing
-- Secrets in the platform secret store only; never in the repository or `.env` committed files
+- Secrets in the VPS `.env` (outside the repository) and CI deploy secrets only; never committed, never logged
 - Rate limiting on auth and submission endpoints
 - Dependency audit in CI; cookie consent and privacy policy pages present before any tracking (NFR: Privacy Compliance)
 
@@ -221,8 +221,8 @@ See `database/` for architecture, migrations, performance, and recovery. In prac
 | Unit & integration tests | Jest |
 | OpenAPI drift | Generated spec matches `openapi/` |
 | Build | `next build` / `nest build` |
-| Deploy | Trunk-based to the managed platform; rollback is one command |
-| Post-deploy smoke | Health check, homepage fetch, form submission probe |
+| Deploy | CI connects to the VPS over SSH, builds and rolls the Docker Compose stack; rollback is redeploying the previous image tag |
+| Post-deploy smoke | Health check, homepage fetch through Cloudflare, form submission probe |
 
 # Documentation Standards
 

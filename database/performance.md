@@ -83,7 +83,7 @@ Server-side budgets are sized so the network and rendering remainder still fit t
 
 | Layer | What | Invalidation |
 |-------|------|--------------|
-| CDN edge | Public pages, images, public read APIs with short TTL | Purge on publish; short TTL as safety net |
+| Cloudflare CDN edge (in front of the VPS) | Public pages, images, public read APIs with short TTL | Purge on publish; short TTL as safety net |
 | Application in-process | Hot reference data (hours, categories) | TTL seconds; safe because data is rarely written |
 | HTTP revalidation | Articles and service pages | On `ArticlePublished` / service edit events |
 | Never cached | Cart, checkout quote, order status, prescription state, shared inbox | Always live |
@@ -92,7 +92,7 @@ Caching must never mask prescription or payment state: stale reads are unaccepta
 
 # Connection Management
 
-- Connection pooling between the application and PostgreSQL; pool size sized to the platform, not maxed
+- Connection pooling between the application and PostgreSQL; pool size sized to the VPS, not maxed
 - Pool exhaustion alerts at threshold
 - Long-running analytical queries (if ever added) go to a replica, not the primary
 

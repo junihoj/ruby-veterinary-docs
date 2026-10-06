@@ -53,9 +53,9 @@ Medical-history PDFs/JPEGs and CMS media live in object storage (ADR-0009). The 
 
 | Store | Holds | Notes |
 |-------|-------|-------|
-| PostgreSQL 16+ | All structured business data | One instance, schema-per-context |
-| Object storage | History uploads, CMS media | Private buckets, signed URLs, retention rules in `backup-and-recovery.md` |
-| CDN edge | Rendered public pages, images | Not a data store; invalidated on publish |
+| PostgreSQL 16+ | All structured business data | One instance on the VPS, schema-per-context |
+| MinIO object storage | History uploads, CMS media | On the VPS behind the S3 API (ADR-0009/0014); private buckets, signed URLs, volume exported to the offsite backup bucket |
+| Cloudflare CDN | Rendered public pages, images | Served in front of the VPS; not a data store; invalidated on publish |
 | Application memory | Session state, hot catalog reads | Loss is always safe |
 
 Deferred until measured need: Redis for caching and background queues (see `README.md`, Future Evolution).
@@ -135,7 +135,7 @@ Partitioning and sharding are explicitly **not** planned: hundreds of SKUs and a
 
 - TLS for all connections, encrypted storage at rest (NFR: Data Encryption)
 - Least-privilege application roles; no superuser in the application
-- Separate credentials per environment; secrets in the platform store only
+- Separate credentials per environment; secrets live in the VPS `.env` outside the repository, never in code or logs
 - Medical-history objects encrypted at rest with access only via signed URLs
 - Backups encrypted identically to primary data (see `backup-and-recovery.md`)
 

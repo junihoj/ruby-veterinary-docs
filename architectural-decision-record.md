@@ -118,7 +118,7 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 
 **Status:** Accepted
 
-- **Decision:** `ruby-veterinary-web-frontend` uses Next.js 16 App Router with React 19, Tailwind CSS 4, and TypeScript, deployed as an edge/CDN-rendered application. Marketing and service pages are statically rendered and cached; authenticated and commerce routes render dynamically.
+- **Decision:** `ruby-veterinary-web-frontend` uses Next.js 16 App Router with React 19, Tailwind CSS 4, and TypeScript, served from the single VPS behind the Cloudflare CDN (ADR-0014). Marketing and service pages are statically rendered and cached at the edge; authenticated and commerce routes render dynamically.
 
 ### Alternatives Considered
 
@@ -182,17 +182,18 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 
 **Status:** Accepted
 
-- **Decision:** Client medical-history uploads (PDF/JPEG) and CMS media are stored in object storage, uploaded via short-lived signed URLs issued by the API, never through the API's own request body.
+- **Decision:** Client medical-history uploads (PDF/JPEG) and CMS media are stored in object storage, uploaded via short-lived signed URLs issued by the API, never through the API's own request body. Object storage runs as MinIO on the single VPS (ADR-0014) behind the S3 API, in private buckets.
 
 ### Alternatives Considered
 
 | Option | Why Not |
 |--------|---------|
-| Local disk on the API host | Lost on redeploy, unscalable, complicates backups |
+| External S3 provider (R2/B2 class) | Monthly cost before launch; MinIO's S3-compatible API keeps this a config change later if scale or compliance demands it |
+| Flat files on local disk | No bucket semantics, no signed URLs, retention unenforceable |
 | Passing files through the API | Wastes bandwidth and memory; unnecessary attack surface |
 
-- **Rationale:** Signed direct uploads keep large binaries out of the application process and make retention rules enforceable at the bucket level.
-- **Consequences:** Buckets are private with per-object access control; retention and deletion policies are defined in `database/backup-and-recovery.md`.
+- **Rationale:** Signed direct uploads keep large binaries out of the application process and make retention rules enforceable at the bucket level; the S3 API preserves an exit path without code changes.
+- **Consequences:** The MinIO volume is part of the off-site backup scope in `database/backup-and-recovery.md`; buckets are private with per-object access control.
 
 ## ADR-0010 - Self-Built Staff Back Office Instead of an External CMS
 
@@ -251,15 +252,24 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 - **Rationale:** The notification interface is the seam; the provider remains swappable, satisfying graceful degradation if it fails.
 - **Consequences:** Failed deliveries raise alerts and surface in the admin dashboard rather than failing user requests.
 
-## ADR-0014 - Provider-Agnostic Managed Hosting with SLA
+## ADR-0014 - Single VPS with Docker Compose
 
-**Status:** Proposed
+**Status:** Accepted
 
-- **Decision:** The frontend deploys to a managed Next.js platform and the API to a managed container platform, both with a 99.9% availability commitment, infrastructure as code, and CI-driven deploys. The specific providers are an open question in `prd.md` section 14.
+- **Decision:** Everything runs on one Ubuntu VPS: Docker Compose orchestrates nginx, the Next.js frontend, the NestJS API, PostgreSQL, and MinIO. Cloudflare fronts the server for DNS, CDN caching, and edge TLS. CI deploys over SSH; PostgreSQL and MinIO volumes are backed up daily to an off-site S3-compatible bucket. Full topology in `deployment-architecture.md`.
 
-- **Rationale:** Uptime is a contractual NFR; managed platforms are the only realistic way a small team meets it.
-- **Consequences:** Environment parity through containers; secrets live in the platform's secret store, never in the repository.
-- **Revisit When:** Provider selection is confirmed by the practice manager.
+### Alternatives Considered
+
+| Option | Why Not |
+|--------|---------|
+| Managed PaaS (separate frontend and API platforms) | Per-service pricing is disproportionate for a single clinic; two platforms to secure instead of one |
+| Kubernetes | Operational burden with no scaling justification at this scale |
+| Multiple VPS / HA pair | Cost and complexity; single-VPS risk is accepted and mitigated by off-site restore instead of failover |
+| Serverless-only | Transactional checkout and prescription flows need a persistent, stateful core |
+
+- **Rationale:** One box with self-restarting containers, external monitoring, and proven off-site recovery is the simplest topology that can credibly pursue the 99.9% NFR on a small-team budget.
+- **Consequences:** Planned maintenance counts against uptime; a host failure means restore-to-new-VPS (RTO ≤ 4 hours), not automatic failover; secrets live in the VPS `.env`, never in the repository.
+- **Revisit When:** Traffic outgrows vertical resizing, or availability requirements demand automatic failover.
 
 ---
 
@@ -287,7 +297,8 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 | `api-specification.md` | Contract produced by ADR-0006 |
 | `engineering-guidelines.md` | How these decisions are applied in daily work |
 | `database/` | Persistence, migrations, performance, and recovery consequences |
-| `prd.md` | Product decisions and the hosting open question |
+| `deployment-architecture.md` | Operational form of ADR-0014: VPS topology, CI/CD, monitoring |
+| `prd.md` | Product decisions and the open VPS provider question |
 
 # Guiding Principle
 

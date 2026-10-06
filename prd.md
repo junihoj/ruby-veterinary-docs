@@ -143,18 +143,25 @@ Decisions and rationale in `architectural-decision-record.md`; API contracts in 
 
 ```
 Browser (mobile-first)
-   |  HTTPS
+   |  HTTPS (edge TLS)
    v
-Next.js 16 storefront + admin UI  --->  CDN / static caching
+Cloudflare CDN / DNS  --->  static caching, DDoS filter
+   |  HTTPS (origin)
+   v
+Single VPS: nginx reverse proxy
+   |
+Next.js 16 storefront + admin UI
    |  REST (JWT)
    v
 NestJS 11 API (modular monolith)
    |            |             |              |
-PostgreSQL   Object        Stripe-class    WhatsApp
- (system of  storage       payment         Business API
-  record)   (uploads)      (tokenised)     (verified)
+PostgreSQL   MinIO object   Stripe-class    WhatsApp
+ (system of  storage        payment         Business API
+  record)   (uploads)       (tokenised)     (verified)
                 \             |             /
                  ---- Email / alert delivery ----
+
+Daily encrypted backups -> off-site S3-compatible bucket (separate provider)
 ```
 
 | Concern | Choice |
@@ -164,7 +171,8 @@ PostgreSQL   Object        Stripe-class    WhatsApp
 | Database | PostgreSQL, single system of record |
 | Payments | External tokenised gateway; card data never stored |
 | Messaging | Verified WhatsApp Business API plus a shared multi-agent inbox |
-| Storage | Object storage for medical-history uploads and media |
+| Storage | MinIO (S3-compatible) on the VPS for medical-history uploads and media |
+| Hosting | Single VPS under Docker Compose, behind Cloudflare (ADR-0014) |
 | Repositories | Three git submodules under `ruby-veterinary-service` |
 
 ---
@@ -233,8 +241,9 @@ Qualitative signals and the binding numeric targets live in `vision.md` section 
 | Multi-agent WhatsApp inbox tool (e.g., ManyChat, Sirena, WhatsApp Business App) | Third-party SaaS | Module 5 shared inbox |
 | Payment gateway (Stripe, PayPal, or Apple Pay class) | Third-party SaaS | Module 4 checkout |
 | Transactional email delivery | Third-party SaaS | Form routing, alerts, newsletter |
-| Object storage provider | Third-party SaaS | History uploads, media |
-| Hosting with 99.9% uptime SLA | Infrastructure | All modules |
+| Single VPS hosting provider (Ubuntu, Docker Compose) | Infrastructure | All modules (`deployment-architecture.md`) |
+| Cloudflare DNS/CDN | Third-party SaaS (free tier) | Edge TLS, static caching, DDoS protection |
+| Off-site backup bucket on a separate provider | Third-party SaaS | Daily PostgreSQL and MinIO backups |
 
 ---
 
@@ -245,6 +254,7 @@ Qualitative signals and the binding numeric targets live in `vision.md` section 
 3. Does the clinic have existing inventory and SKU data to import, or is the catalog built from scratch?
 4. What is the baseline phone-call volume, so self-service impact can be measured?
 5. Which staff member owns the newsletter, and at what cadence?
+6. Which VPS provider and plan (RAM/vCPU) are selected, and where is the domain's DNS hosted?
 
 ---
 

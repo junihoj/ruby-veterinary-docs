@@ -35,10 +35,11 @@ The first recovery priority is always the emergency surface (hours, phone, addre
 
 | Data | Method | Location |
 |------|--------|----------|
-| PostgreSQL (all schemas) | Continuous archiving (WAL) + nightly full logical/base backup | Encrypted object storage, different region from primary |
-| Object storage: medical-history uploads and CMS media | Provider-side versioning/replication with lifecycle rules | Same provider, versioned bucket |
-| Application secrets and configuration | Platform secret store export, encrypted | Secure offline/manager storage |
-| CDN-cached public pages | Not backed up | Regenerated on redeploy |
+| PostgreSQL (all schemas) | Continuous archiving (WAL) + nightly full logical backup | Encrypted, pushed daily to an offsite S3-compatible bucket on a **separate provider/account from the VPS** |
+| Object storage: MinIO volume (medical-history uploads, CMS media) | Daily export of the MinIO data volume | Same offsite bucket, encrypted |
+| Application secrets and configuration | Encrypted copy of the VPS `.env` on each change | Password manager / secure offline storage - never on the VPS alone |
+| Application code and images | Rebuilt from git history by CI | Git hosting (and image tags retained on rollback) |
+| CDN-cached public pages | Not backed up | Regenerated on redeploy; Cloudflare serves stale cache during recovery |
 
 # Backup Schedule
 
@@ -48,8 +49,10 @@ The first recovery priority is always the emergency surface (hours, phone, addre
 | Full database | Nightly | 30 days |
 | Weekly full | Sunday | 12 weeks |
 | Monthly full | 1st of month | 12 months |
-| Object storage versions | Continuous | 90 days for uploads; per CMS policy for media |
+| MinIO volume export | Nightly | 90 days for uploads; per CMS policy for media |
 | Pre-deploy snapshot | Automatically before every migration batch | 7 days |
+
+Every job encrypts before upload and runs from the VPS to the offsite bucket; a job that fails to leave the VPS is treated as a failed backup.
 
 # Security of Backups
 
@@ -113,18 +116,18 @@ Failures surface in the admin alert dashboard alongside other operational signal
 | Scenario | Response |
 |----------|----------|
 | Single table or schema corruption | Point-in-time restore of the affected schema into a new database; replay writes; swap |
-| Full primary database loss | Provision new instance, restore to target time, replay, switch DNS/connection config |
-| Region/provider outage | Restore in the secondary region from cross-region backups; CDN serves static emergency content meanwhile |
-| Ransomware or malicious deletion | Break-glass restore from offline/immutable backup copies; rotate all credentials first |
+| Full primary database loss | Restore from the offsite bucket onto the same VPS (or a fresh one), verify, restart the stack |
+| Total VPS loss (provider failure, destruction) | Provision a replacement VPS, rebuild the stack from compose files, restore PostgreSQL and MinIO from the offsite bucket, repoint Cloudflare DNS; static emergency content is served from edge cache throughout |
+| Ransomware or malicious deletion | Break-glass restore from the offsite bucket's immutable/object-lock copies; rotate all credentials first |
 
-Immutable (object-lock) copies are retained for the monthly backups so that deletion inside the account cannot destroy them.
+Because backups live on a separate provider from the VPS, the total-loss path never depends on the failed machine.
 
 # Acceptance Criteria
 
 - RPO and RTO targets are defined and measured, not aspirational
-- Backups are automated, encrypted, and stored outside the primary account/region
+- Backups are automated, encrypted, and stored off the VPS on a separate provider/account
 - Weekly automated restore verification passes
-- Quarterly DR exercise is completed and documented
+- Quarterly DR exercise is completed and documented, including at least one restore onto a clean machine
 - Restore runbook has been executed by someone other than its author
 
 ---
@@ -135,6 +138,7 @@ Immutable (object-lock) copies are retained for the monthly backups so that dele
 |----------|-------------|
 | `database-architecture.md` | What is being protected |
 | `migrations.md` | Migration failures handled before full restore |
+| `../deployment-architecture.md` | VPS topology these jobs run on and the offsite bucket destination |
 | `../architectural-decision-record.md` | Object storage and hosting decisions |
 | `../non-functional-requirements.md` | Uptime and graceful degradation commitments |
 

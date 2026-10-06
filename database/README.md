@@ -33,11 +33,12 @@ To give one authoritative place for persistence decisions so that migrations, in
 
 | Concern | Choice | Reference |
 |---------|--------|-----------|
-| Primary database | PostgreSQL 16+ | ADR-0003 |
+| Primary database | PostgreSQL 16+ on the VPS | ADR-0003, ADR-0014 |
 | Access layer | TypeORM behind repository interfaces | ADR-0004 |
 | Migrations | TypeORM migrations, version-controlled | `migrations.md` |
-| Large files | Object storage, not the database | ADR-0009 |
-| Caching | CDN edge for public reads; in-process for hot queries | `performance.md` |
+| Large files | MinIO (S3-compatible) on the VPS, not the database | ADR-0009 |
+| Caching | Cloudflare CDN for public reads; in-process for hot queries | `performance.md` |
+| Backups | Daily to an offsite S3-compatible bucket on a separate provider | `backup-and-recovery.md` |
 
 # Architecture Overview
 
