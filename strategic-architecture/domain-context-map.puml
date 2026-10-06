@@ -1,0 +1,55 @@
+@startuml ruby-veterinary-domain-context-map
+!theme plain
+skinparam rectangle {
+  BackgroundColor<<core>> #FFE4EC
+  BorderColor<<core>> #9B111E
+  BackgroundColor<<support>> #E3EDE6
+  BorderColor<<support>> #5C7C6E
+  BackgroundColor<<generic>> #F1F5F9
+  BorderColor<<generic>> #64748B
+  BackgroundColor<<leaf>> #FAF7F5
+  BorderColor<<leaf>> #8A7F77
+}
+
+rectangle "Identity & Access\n(generic)" as ID <<generic>>
+rectangle "Clinic Content\n(supporting)" as CC <<support>>
+rectangle "Publishing\n(core)" as PUB <<core>>
+rectangle "Care Coordination\n(core)" as CAR <<core>>
+rectangle "Client & Patient\nRecords (supporting)" as CPR <<support>>
+rectangle "Commerce\n(core)" as COM <<core>>
+rectangle "Pharmacy\nAuthorisation (core)" as PHA <<core>>
+rectangle "Care Messaging\n(core)" as MSG <<core>>
+rectangle "Notifications\n(leaf)" as NOT <<leaf>>
+rectangle "Operations\n(generic)" as OPS <<generic>>
+
+ID -down-> CC
+ID -down-> PUB
+ID -down-> CAR
+ID -down-> CPR
+ID -down-> COM : veterinarian role
+ID -down-> PHA : prescriber role
+ID -down-> MSG : staff agent
+ID -down-> OPS : staff role
+
+CPR -right-> COM : patient claim
+CPR -right-> PHA : pet + primary vet
+COM -down-> PHA : requires hold
+PHA ..> COM : PrescriptionApproved/\nRejected (events)
+
+MSG -down-> CAR : handover -> booking intent
+MSG -down-> NOT : EmergencyDetected
+CAR -down-> NOT : AlertRaised
+PUB ..> NOT : ArticlePublished (dispatch)
+OPS -up-> CC : read
+OPS -up-> COM : read
+OPS -up-> CAR : read
+OPS -up-> MSG : inbox
+OPS -up-> NOT : alerts
+NOT -right-> (External providers)\nemail / WhatsApp
+
+legend bottom
+  Solid arrow: synchronous dependency or read
+  Dashed arrow: domain events (asynchronous)
+  All cross-context DB access is by id only — never FK across schemas
+endlegend
+@enduml
