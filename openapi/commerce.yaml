@@ -1,0 +1,531 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Commerce API
+  description: Catalog, cart, checkout, orders, and subscriptions. Card data never accepted (ADR-0007).
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Catalog
+  - name: Cart
+  - name: Checkout
+  - name: Orders
+  - name: Subscriptions
+paths:
+  /products:
+    get:
+      tags: [Catalog]
+      summary: Filterable product list
+      operationId: listProducts
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: petType
+          in: query
+          schema: { type: string }
+        - name: lifeStage
+          in: query
+          schema: { type: string }
+        - name: condition
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Published products
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+  /products/{slug}:
+    get:
+      tags: [Catalog]
+      summary: Product detail including variants and bundle contents
+      operationId: getProduct
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Product
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get open cart
+      operationId: getCart
+      responses:
+        '200':
+          description: Cart
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Cart]
+      summary: Create or reuse open cart
+      operationId: ensureCart
+      responses:
+        '200':
+          description: Cart ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Cart]
+      summary: Clear cart
+      operationId: clearCart
+      responses:
+        '204':
+          description: Cleared
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Add item to cart
+      operationId: addCartItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, quantity]
+              properties:
+                variantId: { type: string, example: var_01H... }
+                quantity: { type: integer, minimum: 1 }
+                petId:
+                  type: string
+                  description: Required when the variant's product requires a pet claim
+      responses:
+        '201':
+          description: Added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    patch:
+      tags: [Cart]
+      summary: Update cart item quantity
+      operationId: updateCartItem
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Cart]
+      summary: Remove cart item
+      operationId: removeCartItem
+      parameters:
+        - name: itemId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Removed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /checkout/quote:
+    post:
+      tags: [Checkout]
+      summary: "Recompute totals: tax, shipping or pickup"
+      operationId: checkoutQuote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fulfilmentMethod: { type: string, enum: [ship, pickup] }
+                shippingAddress:
+                  type: object
+                  properties:
+                    line1: { type: string }
+                    line2: { type: string }
+                    city: { type: string }
+                    postalCode: { type: string }
+                    country: { type: string }
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /checkout:
+    post:
+      tags: [Checkout]
+      summary: Place order; returns PRESCRIPTION_PENDING when Rx items present
+      operationId: checkout
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fulfilmentMethod]
+              properties:
+                fulfilmentMethod: { type: string, enum: [ship, pickup] }
+                shippingAddress:
+                  type: object
+                  properties:
+                    line1: { type: string }
+                    line2: { type: string }
+                    city: { type: string }
+                    postalCode: { type: string }
+                    country: { type: string }
+                paymentMethodToken:
+                  type: string
+                  description: Gateway token from hosted/SDK card collection; never PAN
+      responses:
+        '201':
+          description: Order placed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '503':
+          $ref: '#/components/responses/DependencyUnavailable'
+  /orders:
+    get:
+      tags: [Orders]
+      summary: Order history with fulfilment and Rx state
+      operationId: listOrders
+      parameters:
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+      responses:
+        '200':
+          description: Orders
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Single order including prescription status
+      operationId: getOrder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: ord_01H... }
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: List auto-refill subscriptions
+      operationId: listSubscriptions
+      responses:
+        '200':
+          description: Subscriptions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Subscriptions]
+      summary: Create subscription
+      operationId: createSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [variantId, frequency]
+              properties:
+                variantId: { type: string }
+                frequency: { type: string, enum: [monthly, quarterly] }
+                petId: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /subscriptions/{id}:
+    patch:
+      tags: [Subscriptions]
+      summary: Pause or cancel subscription
+      operationId: updateSubscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [active, paused, cancelled] }
+                cancelReason: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Subscriptions]
+      summary: Cancel subscription
+      operationId: cancelSubscription
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Cancelled
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/products:
+    post:
+      tags: [Catalog]
+      summary: Create product (staff catalog:write)
+      operationId: adminCreateProduct
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoryId, name, productType]
+              properties:
+                categoryId: { type: string }
+                name: { type: string }
+                slug: { type: string }
+                summary: { type: string }
+                descriptionMd: { type: string }
+                productType: { type: string, enum: [single, variable, bundle] }
+                requiresPrescription: { type: boolean }
+                requiresPetClaim: { type: boolean }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/products/{id}:
+    patch:
+      tags: [Catalog]
+      summary: Update product or variant (staff catalog:write)
+      operationId: adminUpdateProduct
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Partial product or variant field updates
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    PaginationMeta:
+      type: object
+      properties:
+        limit: { type: integer }
+        cursor: { type: string, nullable: true }
+        hasMore: { type: boolean }
+    ApiResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    CollectionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: {} }
+        meta:
+          allOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: object
+              properties:
+                pagination: { $ref: '#/components/schemas/PaginationMeta' }
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              issue: { type: string }
+        requestId: { type: string }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+  responses:
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: TOKEN_EXPIRED or INVALID_CREDENTIALS
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: STAFF_ONLY (catalog:write required)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: IDEMPOTENCY_CONFLICT or STOCK_CHANGED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unprocessable:
+      description: PRESCRIPTION_PENDING or other business-rule block
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    DependencyUnavailable:
+      description: DEPENDENCY_UNAVAILABLE
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

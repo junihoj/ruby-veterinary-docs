@@ -1,0 +1,237 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Operations API
+  description: Admin alert dashboard and shared WhatsApp inbox (staff only).
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Operations
+paths:
+  /admin/alerts:
+    get:
+      tags: [Operations]
+      summary: Form submissions and bot escalations (staff ops:read)
+      operationId: listAdminAlerts
+      security:
+        - bearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Alerts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/inbox/conversations:
+    get:
+      tags: [Operations]
+      summary: Shared inbox state, concurrent agents supported (staff ops:inbox)
+      operationId: listInboxConversations
+      security:
+        - bearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [bot_active, awaiting_handover, human_active, closed, blocked]
+        - name: emergencyOnly
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Conversations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/inbox/conversations/{id}/messages:
+    get:
+      tags: [Operations]
+      summary: Conversation message thread
+      operationId: listInboxMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: cnv_01H... }
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+      responses:
+        '200':
+          description: Messages
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Operations]
+      summary: Agent reply
+      operationId: sendInboxMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bodyText]
+              properties:
+                bodyText: { type: string }
+      responses:
+        '201':
+          description: Queued for provider send
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DependencyUnavailable'
+  /admin/inbox/conversations/{id}/claim:
+    post:
+      tags: [Operations]
+      summary: Accept handover (first claim wins)
+      operationId: claimInboxConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Claimed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    PaginationMeta:
+      type: object
+      properties:
+        limit: { type: integer }
+        cursor: { type: string, nullable: true }
+        hasMore: { type: boolean }
+    ApiResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    CollectionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: {} }
+        meta:
+          allOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: object
+              properties:
+                pagination: { $ref: '#/components/schemas/PaginationMeta' }
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+  responses:
+    Unauthorized:
+      description: TOKEN_EXPIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: STAFF_ONLY (ops:read or ops:inbox)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: IDEMPOTENCY_CONFLICT or conversation already claimed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    DependencyUnavailable:
+      description: DEPENDENCY_UNAVAILABLE (provider down; degradation applies)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

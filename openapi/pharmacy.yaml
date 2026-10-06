@@ -1,0 +1,263 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Pharmacy Authorisation API
+  description: |
+    Staff-facing prescription review queue and decision endpoints.
+    The approve endpoint is the only place an Rx order can be released;
+    it always writes the append-only audit trail (ADR-0012).
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Pharmacy
+paths:
+  /prescriptions/queue:
+    get:
+      tags: [Pharmacy]
+      summary: Review queue (staff rx:review)
+      operationId: listPrescriptionQueue
+      security:
+        - bearerAuth: []
+      parameters:
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, queried]
+      responses:
+        '200':
+          description: Queue
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /prescriptions/{id}:
+    get:
+      tags: [Pharmacy]
+      summary: Request with patient history and prescriber context
+      operationId: getPrescriptionRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: rx_01H... }
+      responses:
+        '200':
+          description: Prescription request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /prescriptions/{id}/approve:
+    post:
+      tags: [Pharmacy]
+      summary: Approve; raises PrescriptionApproved, writes audit row
+      operationId: approvePrescription
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string }
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /prescriptions/{id}/reject:
+    post:
+      tags: [Pharmacy]
+      summary: Reject with reason; raises PrescriptionRejected
+      operationId: rejectPrescription
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reasonText]
+              properties:
+                reasonCode: { type: string, example: wrong_dose }
+                reasonText: { type: string }
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /prescriptions/{id}/query:
+    post:
+      tags: [Pharmacy]
+      summary: Request more information; raises PrescriptionQueried
+      operationId: queryPrescription
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reasonText]
+              properties:
+                reasonCode: { type: string, example: need_history }
+                reasonText: { type: string }
+      responses:
+        '200':
+          description: Queried
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    PaginationMeta:
+      type: object
+      properties:
+        limit: { type: integer }
+        cursor: { type: string, nullable: true }
+        hasMore: { type: boolean }
+    ApiResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    CollectionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: {} }
+        meta:
+          allOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: object
+              properties:
+                pagination: { $ref: '#/components/schemas/PaginationMeta' }
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+  responses:
+    Unauthorized:
+      description: TOKEN_EXPIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: PRESCRIBER_REQUIRED (rx:review role needed)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: IDEMPOTENCY_CONFLICT (already decided)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

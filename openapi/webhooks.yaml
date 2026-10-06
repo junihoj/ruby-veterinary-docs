@@ -1,0 +1,137 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Webhooks
+  description: |
+    Inbound third-party webhooks: WhatsApp Business API and payment gateway.
+    Auth is provider signature verification, not bearer tokens.
+    Processing contract: verify signature → immediate 200 → dedupe by
+    provider event id → async work. Rejections alert Operations.
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Webhooks
+paths:
+  /webhooks/whatsapp/verify:
+    get:
+      tags: [Webhooks]
+      summary: Meta webhook verification handshake
+      operationId: verifyWhatsAppWebhook
+      security: []
+      parameters:
+        - name: hub.mode
+          in: query
+          schema: { type: string, example: subscribe }
+        - name: hub.verify_token
+          in: query
+          schema: { type: string }
+        - name: hub.challenge
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Echo hub.challenge when token matches
+          content:
+            text/plain:
+              schema:
+                type: string
+        '403':
+          description: Invalid verify token
+  /webhooks/whatsapp:
+    post:
+      tags: [Webhooks]
+      summary: Inbound messages and status callbacks
+      operationId: receiveWhatsAppWebhook
+      security:
+        - webhookSignature: []
+      description: |
+        Verify provider signature before parsing. Acknowledge within provider
+        timeout (immediate 200), process asynchronously. Deduplicate by
+        provider message id. Keyword rules fire within the 2s bot latency
+        budget; panic keywords raise EmergencyDetected with highest priority.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entry:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      changes:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            value:
+                              type: object
+                              properties:
+                                messages:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      id: { type: string }
+                                      from: { type: string }
+                                      type: { type: string }
+                                      text:
+                                        type: object
+                                        properties:
+                                          body: { type: string }
+                                statuses:
+                                  type: array
+                                  items:
+                                    type: object
+                                    properties:
+                                      id: { type: string }
+                                      status: { type: string }
+      responses:
+        '200':
+          description: Accepted for async processing
+        '401':
+          description: Signature verification failed (alert raised)
+  /webhooks/payments:
+    post:
+      tags: [Webhooks]
+      summary: Payment capture confirmations, failures, refunds
+      operationId: receivePaymentWebhook
+      security:
+        - webhookSignature: []
+      description: |
+        Idempotent by provider event id. Maps to PaymentCaptured /
+        PaymentFailed / refund events. Never contains card numbers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: string
+                  description: Provider event id (dedupe key)
+                type:
+                  type: string
+                  enum: [payment_intent.succeeded, payment_intent.payment_failed, charge.refunded]
+                data:
+                  type: object
+                  properties:
+                    payment_ref: { type: string }
+                    order_ref: { type: string }
+                    amount: { type: number }
+                    currency: { type: string }
+      responses:
+        '200':
+          description: Accepted
+        '401':
+          description: Signature verification failed (alert raised)
+components:
+  securitySchemes:
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Provider-Signature

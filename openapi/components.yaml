@@ -1,0 +1,242 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary API
+  description: |
+    Shared components for the ruby-veterinary REST API.
+
+    Canonical envelope, error model, pagination, security schemes, and
+    parameters. Domain spec files repeat these locally so each file is
+    self-contained; this file is the reference implementation.
+
+    Source of truth for human-readable rules: api-specification.md.
+  version: 1.0.0
+  license:
+    name: Proprietary
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+    description: Production (placeholder domain)
+  - url: http://localhost:3000/api/v1
+    description: Local development
+
+paths: {}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Provider-Signature
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Client-generated key; replays within 24h return the original response
+      schema:
+        type: string
+        maxLength: 128
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId:
+          type: string
+          example: req_01H8Z...
+        timestamp:
+          type: string
+          format: date-time
+    PaginationMeta:
+      type: object
+      properties:
+        limit:
+          type: integer
+        cursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+        total:
+          type: integer
+          nullable: true
+    ApiResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          description: Resource or array of resources
+        meta:
+          $ref: '#/components/schemas/Meta'
+    ApiCollectionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: {}
+        meta:
+          allOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: object
+              properties:
+                pagination:
+                  $ref: '#/components/schemas/PaginationMeta'
+    ErrorDetail:
+      type: object
+      required: [field, issue]
+      properties:
+        field:
+          type: string
+          example: items.0.productId
+        issue:
+          type: string
+          example: rx_only
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code:
+          type: string
+          description: Stable machine-readable code
+          examples: [VALIDATION_FAILED, TOKEN_EXPIRED, PRESCRIPTION_PENDING]
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+        requestId:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+    AuthTokenPair:
+      type: object
+      required: [accessToken, refreshToken, tokenType, expiresIn]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          description: Seconds
+    RoleCode:
+      type: string
+      enum:
+        - client
+        - receptionist
+        - veterinarian
+        - vet_technician
+        - practice_manager
+    StaffIdentity:
+      type: object
+      properties:
+        id:
+          type: string
+          example: usr_01H8Z...
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        kind:
+          type: string
+          enum: [client, staff]
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleCode'
+
+  responses:
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: TOKEN_EXPIRED or INVALID_CREDENTIALS
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: STAFF_ONLY or PRESCRIBER_REQUIRED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: IDEMPOTENCY_CONFLICT or STOCK_CHANGED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    TooLarge:
+      description: UPLOAD_TOO_LARGE
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unprocessable:
+      description: PRESCRIPTION_PENDING (or other business-rule block)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: RATE_LIMITED
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: INTERNAL_ERROR
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    DependencyUnavailable:
+      description: DEPENDENCY_UNAVAILABLE; graceful degradation applies
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

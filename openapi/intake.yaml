@@ -1,0 +1,235 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Intake API
+  description: Appointment requests, new-client intake, and signed medical-history uploads.
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Intake
+paths:
+  /appointment-requests:
+    post:
+      tags: [Intake]
+      summary: Submit an appointment request
+      operationId: createAppointmentRequest
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppointmentRequestCreate' }
+      responses:
+        '201':
+          description: Request received
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /clients/intake:
+    post:
+      tags: [Intake]
+      summary: New-client registration with optional history upload ids
+      operationId: createIntakeSubmission
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntakeSubmissionCreate' }
+      responses:
+        '201':
+          description: Intake received
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /uploads/sign:
+    post:
+      tags: [Intake]
+      summary: Issue signed direct-to-object-storage upload URL
+      operationId: signUpload
+      description: |
+        Returns a short-lived signed URL and object key. Client uploads directly
+        to MinIO; no file bytes pass through the API (ADR-0009).
+        Accepted types: application/pdf, image/jpeg. Size cap: 10 MB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose, filename, mimeType, byteSize]
+              properties:
+                purpose:
+                  type: string
+                  enum: [medical_history, cms_media]
+                filename: { type: string }
+                mimeType:
+                  type: string
+                  enum: [application/pdf, image/jpeg]
+                byteSize: { type: integer, maximum: 10485760 }
+      responses:
+        '200':
+          description: Signed upload details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      uploadId: { type: string, example: upl_01H... }
+                      objectKey: { type: string }
+                      uploadUrl: { type: string, format: uri }
+                      method: { type: string, example: PUT }
+                      headers:
+                        type: object
+                        additionalProperties: { type: string }
+                      expiresAt: { type: string, format: date-time }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+  /clients/intake/{id}/status:
+    get:
+      tags: [Intake]
+      summary: Intake submission status
+      operationId: getIntakeStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: intake_01H... }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    ApiResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    AppointmentRequestCreate:
+      type: object
+      required: [contactName, contactPhone, contactEmail, petName, reason]
+      properties:
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string, format: email }
+        petName: { type: string }
+        petSpecies: { type: string, enum: [dog, cat, other] }
+        reason: { type: string }
+        preferredWindowStart: { type: string, format: date-time }
+        preferredWindowEnd: { type: string, format: date-time }
+        urgency: { type: string, enum: [routine, soon, urgent] }
+    IntakeSubmissionCreate:
+      type: object
+      required: [contactName, contactPhone, contactEmail]
+      properties:
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string, format: email }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        existingClient: { type: boolean }
+        preferredVetUserId: { type: string }
+        notes: { type: string }
+        historyUploadIds:
+          type: array
+          items: { type: string }
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              issue: { type: string }
+        requestId: { type: string }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+  responses:
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: TOKEN_EXPIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: IDEMPOTENCY_CONFLICT
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooLarge:
+      description: UPLOAD_TOO_LARGE
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    RateLimited:
+      description: RATE_LIMITED
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

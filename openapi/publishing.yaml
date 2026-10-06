@@ -1,0 +1,406 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Publishing API
+  description: Articles, taxonomy, and newsletter subscription.
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Publishing
+paths:
+  /articles:
+    get:
+      tags: [Publishing]
+      summary: List published articles
+      operationId: listArticles
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/LimitParam' }
+        - { $ref: '#/components/parameters/CursorParam' }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: tag
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Published articles
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+    post:
+      tags: [Publishing]
+      summary: Create article draft
+      operationId: createArticle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, bodyMd]
+              properties:
+                title: { type: string }
+                slug: { type: string }
+                excerpt: { type: string }
+                bodyMd: { type: string }
+                coverObjectKey: { type: string }
+                categoryId: { type: string }
+                tagIds:
+                  type: array
+                  items: { type: string }
+                seo:
+                  type: object
+                  properties:
+                    metaTitle: { type: string }
+                    metaDescription: { type: string }
+      responses:
+        '201':
+          description: Draft created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /articles/{slug}:
+    get:
+      tags: [Publishing]
+      summary: Article detail with author, related feed, SEO metadata
+      operationId: getArticle
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Article
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /articles/{id}:
+    patch:
+      tags: [Publishing]
+      summary: Edit article (draft or published)
+      operationId: updateArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: art_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                slug: { type: string }
+                excerpt: { type: string }
+                bodyMd: { type: string }
+                coverObjectKey: { type: string }
+                categoryId: { type: string }
+                status: { type: string, enum: [draft, published, archived] }
+                seo:
+                  type: object
+                  properties:
+                    metaTitle: { type: string }
+                    metaDescription: { type: string }
+                    canonicalPath: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /articles/{id}/publish:
+    post:
+      tags: [Publishing]
+      summary: Publish article; raises ArticlePublished
+      operationId: publishArticle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Published
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /categories:
+    get:
+      tags: [Publishing]
+      summary: List categories
+      operationId: listCategories
+      security: []
+      responses:
+        '200':
+          description: Categories
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+    post:
+      tags: [Publishing]
+      summary: Create category (staff)
+      operationId: createCategory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                description: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /categories/{id}:
+    patch:
+      tags: [Publishing]
+      summary: Edit category (staff)
+      operationId: updateCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                description: { type: string }
+                sortOrder: { type: integer }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /tags:
+    get:
+      tags: [Publishing]
+      summary: List tags
+      operationId: listTags
+      security: []
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionResponse' }
+    post:
+      tags: [Publishing]
+      summary: Create tag (staff)
+      operationId: createTag
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                slug: { type: string }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /tags/{id}:
+    patch:
+      tags: [Publishing]
+      summary: Edit tag (staff)
+      operationId: updateTag
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /newsletter/subscribe:
+    post:
+      tags: [Publishing]
+      summary: Newsletter email capture (rate limited, idempotent UX)
+      operationId: subscribeNewsletter
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+                source: { type: string }
+      responses:
+        '201':
+          description: Subscription recorded (pending or existing active)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    PaginationMeta:
+      type: object
+      properties:
+        limit: { type: integer }
+        cursor: { type: string, nullable: true }
+        hasMore: { type: boolean }
+    ApiResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    CollectionResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: { type: array, items: {} }
+        meta:
+          allOf:
+            - $ref: '#/components/schemas/Meta'
+            - type: object
+              properties:
+                pagination: { $ref: '#/components/schemas/PaginationMeta' }
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+  responses:
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: TOKEN_EXPIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: STAFF_ONLY
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    RateLimited:
+      description: RATE_LIMITED
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
