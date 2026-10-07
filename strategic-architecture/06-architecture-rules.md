@@ -163,6 +163,7 @@ The non-negotiable constraints that preserve context isolation, clinical safety,
 |----------|-------------|
 | `../bounded-context.md` | Rules 1 source |
 | `../architectural-decision-record.md` | ADRs behind MUSTs |
+| `../api-architecture.md` | Code-level enforcement of these rules |
 | `../engineering-guidelines.md` | Day-to-day review gates |
 | `../non-functional-requirements.md` | Performance/security targets |
 | `../ui-ux/accessibility.md` | Accessibility MUSTs |

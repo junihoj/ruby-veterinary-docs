@@ -4,7 +4,7 @@
 >
 > **Document:** Architecture Decision Records
 >
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 >
 > **Status:** Living Document
 >
@@ -99,7 +99,7 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 
 ## ADR-0004 - TypeORM with Repository Pattern
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0015
 
 - **Decision:** TypeORM is the data access layer, used only through domain repositories injected by interface (`{ provide: 'ClientRepository', useClass: TypeOrmClientRepository }`). Entities never leak past a context boundary.
 
@@ -271,6 +271,55 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 - **Consequences:** Planned maintenance counts against uptime; a host failure means restore-to-new-VPS (RTO ≤ 4 hours), not automatic failover; secrets live in the VPS `.env`, never in the repository.
 - **Revisit When:** Traffic outgrows vertical resizing, or availability requirements demand automatic failover.
 
+## ADR-0015 - Prisma 7 with Driver Adapters (Supersedes ADR-0004)
+
+**Status:** Accepted
+
+**Supersedes:** ADR-0004
+
+## Context
+
+ADR-0004 chose TypeORM with string-token repositories before any API code existed. Since then three facts changed:
+
+1. The organisation's reference platform (`reni-verse-api`) standardised on Prisma with the `@prisma/adapter-pg` driver adapter, and its architecture patterns (module-per-context, CQRS command/query split, context facades, port/adapter for external systems) are the style adopted by `api-architecture.md`.
+2. Prisma's `multiSchema` feature reached General Availability (Prisma 6.13.0), so ADR-0003's per-context schema namespaces map directly to `schemas = [...]` in the datasource and `@@schema("...")` on each model — no preview flag.
+3. `ruby-veterinary-api` is still a pristine NestJS 11 scaffold with zero persistence code. Switching now is free; after Phase 1 it would be a rewrite.
+
+## Decision
+
+- **Prisma 7** with the **`@prisma/adapter-pg`** driver adapter is the data access layer for `ruby-veterinary-api`.
+- One `prisma/schema.prisma` declares **all ten per-context schema namespaces** from ADR-0003 (`schemas = ["identity", "content", "publishing", "intake", "clients", "commerce", "pharmacy", "messaging", "notifications", "operations"]`), with `@@schema(...)` on every model.
+- A single `PrismaService` (module `src/prisma/`) owns the client lifecycle and is provided globally.
+- **Repositories are concrete `@Injectable` classes wrapping `PrismaService`**, one per repository concern, living in `modules/<ctx>/infrastructure/repositories/`.
+- Direct `prisma.*` usage outside a module's own repository classes is a review failure (the Prisma equivalent of ADR-0004's TypeORM rule).
+- ADR-0004 is marked **Superseded** by this ADR. ADR-0003 is unchanged and implemented via `@@schema`.
+
+### Alternatives Considered
+
+| Option | Why Not |
+|--------|---------|
+| Stay on TypeORM | Honours ADR-0004 literally, but `reni-verse-api` and this decision now share one persistence style; ADR-0004's original "Prisma is weaker" concern was pre-multiSchema-GA, and `ruby-veterinary-api` has no TypeORM code to preserve. ADR immutability is satisfied by superseding, not editing. |
+| Drizzle ORM | Less mature NestJS integration; no org experience to build on |
+| Raw SQL via `pg` | Loses type safety, migration tooling, and the repository/mapper patterns shared with `reni-verse-api` |
+| TypeORM now, Prisma later | Two migrations instead of one; the later one would still be a rewrite |
+
+## Rationale
+
+One persistence stack across the organisation's NestJS services means the repository, mapper, and adapter patterns transfer directly; Prisma's generated client gives end-to-end type safety from schema to handler; `prisma migrate` covers the versioned-migration requirement in `database/migrations.md`; and multi-schema keeps the hard context boundaries of ADR-0002/0003 at the database level.
+
+## Consequences
+
+- The API depends on `prisma`, `@prisma/client`, and `@prisma/adapter-pg`; configuration moves into `prisma.config.ts` plus `DATABASE_URL`.
+- Migrations are produced by `prisma migrate` but must still satisfy `database/migrations.md`: versioned, reviewed, never edited after merge, no manual production DDL.
+- IDs: the database generates UUIDs (Prisma default); controllers serialise prefixed opaque strings (`usr_`, `ord_`, `rx_`, ...) per `api-specification.md`.
+- Cross-context relations must **not** use Prisma `@relation` across schemas; they are plain string id columns per ADR-0003's no-cross-schema-FK rule.
+- If a model name collides across schemas, the Prisma model name is disambiguated and mapped to the documented table with `@@map`.
+- The string-token provider pattern (`{ provide: 'ClientRepository', ... }`) from ADR-0004 is no longer the convention; repositories are injected as concrete classes, facades and external-system ports keep DI tokens.
+
+## Revisit When
+
+A context needs sustained hand-tuned SQL beyond what `$queryRaw` inside its own repository can express, or a Prisma release regresses driver-adapter or multi-schema behaviour. Either condition warrants a new ADR, not an informal switch.
+
 ---
 
 # ADR Governance
@@ -293,6 +342,7 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 
 | Document | Relationship |
 |----------|-------------|
+| `api-architecture.md` | How ADR-0002, ADR-0003, and ADR-0015 are shaped into code |
 | `bounded-context.md` | Context boundaries this architecture enforces |
 | `api-specification.md` | Contract produced by ADR-0006 |
 | `engineering-guidelines.md` | How these decisions are applied in daily work |

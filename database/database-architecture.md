@@ -156,7 +156,7 @@ Partitioning and sharding are explicitly **not** planned: hundreds of SKUs and a
 |----------|-------------|
 | `../bounded-context.md` | Context ownership this architecture implements |
 | `../domain-model.md` | Entities stored in these schemas |
-| `../architectural-decision-record.md` | PostgreSQL and TypeORM decisions |
+| `../architectural-decision-record.md` | PostgreSQL (ADR-0003) and Prisma (ADR-0015) decisions |
 | `migrations.md` | How this schema changes |
 | `performance.md` | How it stays fast |
 

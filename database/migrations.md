@@ -4,7 +4,7 @@
 >
 > **Document:** Database Migrations
 >
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 >
 > **Status:** Living Document
 >
@@ -26,7 +26,7 @@ All schema change is schema-as-code. There is no manual production DDL, ever.
 
 ## Schema as Code
 
-Migrations are version-controlled TypeScript files managed by TypeORM's migration tooling. They are reviewed in pull requests like any other code.
+Migrations are version-controlled SQL files managed by Prisma Migrate (`prisma migrate dev --name <slug>`). They are reviewed in pull requests like any other code.
 
 ## Forward-Only Mindset
 
@@ -55,10 +55,10 @@ One logical change per migration, scoped to one context schema where possible.
 # Naming Convention
 
 ```
-<TypeOrTimestamp>-<Verb><Thing>
+<timestamp>-<verb>_<thing>
 ```
 
-Examples: `0001-CreateClientTable`, `0007-AddPrescriptionAuditActor`. Sequential, sortable, never reused.
+`prisma migrate dev --name` generates the timestamped directory; the slug describes the change in snake_case: `20261007120000_create_client_table`, `20261014093000_add_prescription_audit_actor`. Sequential by timestamp, sortable, never reused.
 
 # Migration Types
 
@@ -95,7 +95,7 @@ Destructive operations (drops, narrowing types) are only ever performed after th
 
 # Transactions and Locking
 
-- Regular migrations run in a transaction; `CONCURRENTLY` index builds do not and must be run by the migration runner's no-transaction mode
+- Regular migrations run in a transaction; Prisma Migrate marks exceptions with the `-- non-transactional` directive (used for `CREATE INDEX CONCURRENTLY`)
 - Avoid long-held `ACCESS EXCLUSIVE` locks on hot tables (orders, conversations)
 - Check `pg_locks` and migration duration budgets in review for production-sized tables
 
@@ -150,7 +150,7 @@ Drift detection compares the live schema against the migration history on a sche
 | `database-architecture.md` | The schema this process maintains |
 | `../engineering-guidelines.md` | Review and CI standards |
 | `backup-and-recovery.md` | What to do when a migration destroys data |
-| `../architectural-decision-record.md` | TypeORM decision (ADR-0004) |
+| `../architectural-decision-record.md` | Prisma decision (ADR-0015), superseding ADR-0004 |
 
 # Guiding Principle
 

@@ -1,6 +1,6 @@
 # ruby-veterinary Documentation
 
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 > **Status:** Living Documentation
 > **Owner:** ruby-veterinary
 > **Product:** ruby-veterinary (single veterinary clinic)
@@ -46,6 +46,7 @@ This repository is the specification source of truth for the product. The implem
 | [domain-events.md](domain-events.md) | Domain event catalog and publisher/subscriber matrix |
 | [bounded-context.md](bounded-context.md) | Strategic context map, ownership, integration patterns |
 | [architectural-decision-record.md](architectural-decision-record.md) | Architecture decisions and their rationale |
+| [api-architecture.md](api-architecture.md) | API code contract: module template, CQRS, facades, port/adapter, boundaries |
 | [deployment-architecture.md](deployment-architecture.md) | Single-VPS topology, CI/CD, monitoring, and how the 99.9% target is met |
 | [api-specification.md](api-specification.md) | API conventions, endpoints, error model, webhooks |
 
@@ -83,13 +84,14 @@ This repository is the specification source of truth for the product. The implem
 ### For Engineers
 
 1. `architectural-decision-record.md` - why the stack is what it is
-2. `api-specification.md` - contracts between services
-3. `domain-model.md` and `bounded-context.md` - how the system is carved up
-4. `strategic-architecture/` - context map, events, ownership, rules
-5. `engineering-guidelines.md` - how we work
-6. `database/` - persistence decisions
-7. `deployment-architecture.md` - where everything runs and how it ships
-8. `ui-ux/` - design system and emergency patterns
+2. `api-architecture.md` - how the API is shaped in code
+3. `api-specification.md` - contracts between services
+4. `domain-model.md` and `bounded-context.md` - how the system is carved up
+5. `strategic-architecture/` - context map, events, ownership, rules
+6. `engineering-guidelines.md` - how we work
+7. `database/` - persistence decisions
+8. `deployment-architecture.md` - where everything runs and how it ships
+9. `ui-ux/` - design system and emergency patterns
 
 ### For Product and Clinic Stakeholders
 
@@ -121,6 +123,7 @@ ruby-veterinary-docs/
 |-- domain-events.md                   # Event catalog
 |-- bounded-context.md                 # Strategic context map
 |-- architectural-decision-record.md   # ADRs
+|-- api-architecture.md               # API code contract (modules, CQRS, facades, ports)
 |-- api-specification.md               # API contracts
 |-- deployment-architecture.md         # VPS topology, CI/CD, operations
 |-- engineering-guidelines.md          # Engineering standards

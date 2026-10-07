@@ -4,7 +4,7 @@
 >
 > **Document:** Engineering Guidelines
 >
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 >
 > **Status:** Living Document
 >
@@ -36,7 +36,7 @@ Three sibling repositories under the `ruby-veterinary-service` parent, tracked a
 | Repository | Contents | Toolchain |
 |------------|----------|-----------|
 | `ruby-veterinary-web-frontend` | Public site, storefront, staff back office | Next.js 16, React 19, Tailwind 4, TypeScript, pnpm |
-| `ruby-veterinary-api` | REST API and third-party integrations | NestJS 11, TypeScript, Jest 30, ESLint 9, Prettier |
+| `ruby-veterinary-api` | REST API and third-party integrations | NestJS 11, Prisma 7, TypeScript, Jest 30, ESLint 9, Prettier |
 | `ruby-veterinary-docs` | This specification set | Markdown, UTF-8 |
 
 Parent repository pins all three as submodules. A change spanning repositories is merged in dependency order: docs first, then API, then front end.
@@ -106,20 +106,29 @@ A task is ready when acceptance is testable against `functional-requirements.md`
 
 # Code Organization
 
-**API (NestJS)** - one module per bounded context, matching `bounded-context.md`:
+**API (NestJS)** - one module per bounded context, four layers as folders inside each module. The full contract (template, facades, ports, boundaries, phases) is `api-architecture.md`:
 
 ```
 src/
-├── modules/
-│   ├── commerce/            # controller, service, repository, entities, dto
-│   ├── pharmacy/
-│   ├── intake/
+├── config/                        # validated env schema
+├── prisma/                        # PrismaService (global) — ADR-0015
+├── shared/
+│   ├── kernel/                    # AggregateRoot, Entity, ValueObject, Result, PrefixedId
+│   ├── integration/               # IntegrationEvent + publisher port + explorer
+│   └── cross-cutting/             # auth guards, envelope, error filter, idempotency
+├── modules/                       # ten bounded contexts (bounded-context.md)
+│   ├── identity/
+│   │   ├── domain/                # only where invariants exist
+│   │   ├── application/           # commands, queries, handlers, facades, ports, dto
+│   │   ├── infrastructure/        # repositories (Prisma), adapters, mappers, consumers
+│   │   └── presentation/          # controllers (HTTP only)
+│   ├── commerce/
+│   ├── pharmacy-authorisation/
 │   └── ...
-├── shared/                  # cross-cutting: auth guard, error codes, config
-└── main.ts
+└── main.ts                        # /api/v1, ValidationPipe, Swagger
 ```
 
-Rules: controllers handle HTTP only, services hold business rules, repositories are the sole importers of TypeORM (ADR-0004), DTOs validate at the boundary.
+Rules: controllers handle HTTP only; business rules live in handlers and domain objects; repositories are the sole importers of Prisma (ADR-0015); DTOs validate at the boundary; cross-module calls go through facade ports or integration events — never internal imports (`api-architecture.md` §10).
 
 **Front end (Next.js)** - App Router with route groups:
 
@@ -150,12 +159,14 @@ src/
 
 # Backend Guidelines (NestJS)
 
-- Module boundaries mirror bounded contexts; cross-module imports go through the public service interface only
+- Module boundaries mirror bounded contexts; cross-module calls go through facade ports or integration events only (`api-architecture.md` §10)
+- CQRS split: commands and queries via `@nestjs/cqrs`; handlers are the use cases; controllers map DTOs to buses
+- Aggregates exist only where invariants exist — no unused domain scaffolding
 - Validate every input with class-validator DTOs; reject unknown fields on writes
 - Authorisation via guards reading role claims; never trust a field supplied by the client to assert identity (pet and prescriber associations are looked up, not accepted)
-- Transactions wrap any multi-write operation touching commerce or pharmacy state
+- Transactions wrap any multi-write operation touching commerce or pharmacy state; Rx decision + audit rows share one transaction (ADR-0012)
+- Integration events publish after commit; consumers are idempotent
 - Configuration through `@nestjs/config` with validated schema; no hardcoded URLs or keys
-- Audit writes are part of the same transaction as the decision they describe
 
 # Frontend Guidelines (Next.js)
 
@@ -267,6 +278,7 @@ Trunk-based continuous delivery. Changes behind flags are released dark and acti
 | Document | Relationship |
 |----------|-------------|
 | `architectural-decision-record.md` | Decisions these guidelines operationalise |
+| `api-architecture.md` | Code shape for the API: module template, CQRS, facades, boundaries |
 | `api-specification.md` | Contract conventions enforced in review |
 | `bounded-context.md` | Module boundaries mirrored in code organization |
 | `database/` | Persistence standards referenced here |
