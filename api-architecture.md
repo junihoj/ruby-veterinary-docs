@@ -177,9 +177,9 @@ Aggregates exist **only** where invariants must hold under concurrent change. Th
 
 | Aggregate | Context | Invariants it owns |
 |-----------|---------|--------------------|
-| `Order` | commerce | Status transitions; Rx lines block `paid` until Pharmacy events; money `numeric(10,2)` |
-| `Cart` | commerce | One open cart per user; Rx items require `pet_id` before quote succeeds; no price snapshots |
-| `Product` | commerce | Stock never negative (`available = stock_quantity - stock_reserved`); variant integrity |
+| `Order` | commerce | Status transitions; Rx lines block `paid` until Pharmacy events; money `numeric(10,2)`; digital-only orders use `digital` fulfilment and skip physical fulfilment |
+| `Cart` | commerce | One open cart per user; Rx items require `pet_id` before quote succeeds; no price snapshots; composite lines carry slot selections in `cart_item_components` |
+| `Product` | commerce | Stock never negative (`available = stock_quantity - stock_reserved`); variant integrity; per-type rules: `external` never cartable/Rx/subscribable; `grouped` parent not purchasable; `composite` slots enforce `min_select`/`max_select` with `fixed`/`sum` pricing; `virtual`/`downloadable` excluded from shipping weight; Rx derived for composite (OR of slot options) |
 | `Prescription` | pharmacy-authorisation | Vet-only decisions; append-only decision + audit rows (ADR-0012); status transitions |
 | `Appointment` | care-coordination | Status transitions; requested-window validity |
 | `Intake` | care-coordination | Step completion rules; upload type/size constraints |

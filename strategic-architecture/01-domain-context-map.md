@@ -24,7 +24,7 @@ Classifies all ten bounded contexts as Core, Supporting, or Generic, and shows u
 
 | Context | Strategic Importance |
 |---------|---------------------|
-| **Commerce** | Owns the online revenue line — variable products, bundles, subscriptions |
+| **Commerce** | Owns the online revenue line — all seven product types (simple, variable, grouped, external, virtual, downloadable, composite), subscriptions |
 | **Pharmacy Authorisation** | Clinical safety guardrail; the clinic's licence to sell prescription items online |
 | **Care Messaging** | Always-on WhatsApp triage with guaranteed human handover; after-hours presence |
 | **Care Coordination** | Turns traffic into booked appointments and accepted clients |

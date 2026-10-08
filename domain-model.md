@@ -77,9 +77,9 @@ The request surface between owners and the clinic: turning a website visit into 
 
 The storefront and everything between browsing and fulfilment.
 
-**Owns:** Product catalog with the three product types (single, variable with per-variant price/SKU/stock, composite bundles), product categories (Prescription Medication, Therapeutic Diets, General Pet Supplies), search and filters (pet type, life stage, health condition), shopping cart, order lifecycle, tax and shipping calculation, fulfilment choice (home shipping or free in-clinic/curbside pickup), payment capture through the tokenised gateway, auto-refill and subscription billing.
+**Owns:** Product catalog in seven types (simple, variable, grouped, external/affiliate, virtual, downloadable, and composite with configurable component slots), product categories (Prescription Medication, Therapeutic Diets, General Pet Supplies), search and filters (pet type, life stage, health condition), shopping cart, order lifecycle, tax and shipping calculation, fulfilment choice (home shipping, free in-clinic/curbside pickup, or digital), payment capture through the tokenised gateway, auto-refill and subscription billing.
 
-**Key Entities:** Product, ProductVariant, Bundle, ProductCategory, Cart, CartItem, Order, OrderItem, Fulfilment, Payment, Subscription
+**Key Entities:** Product, ProductVariant, CompositeSlot, GroupedMember, DownloadFile, DownloadGrant, ProductCategory, Cart, CartItem, Order, OrderItem, Fulfilment, Payment, Subscription
 
 ### Pharmacy Authorisation
 
@@ -195,7 +195,7 @@ The full catalog with publisher/subscriber assignments lives in `domain-events.m
 | Prescription | `PrescriptionRequest` | Decision history is append-only and audited |
 | Appointment | `AppointmentRequest` | Status lifecycle from submitted to triaged |
 | Conversation | `Conversation` | Messages, menu state, and handover state move together |
-| Product | `Product` | Variants and bundle components belong to it; stock is per-variant |
+| Product | `Product` | Variants, grouped members, composite slots, and download files belong to it; stock is per-variant |
 | Client | `Client` | Pets and history belong to it |
 | Article | `Article` | Body, SEO metadata, and category links publish together |
 

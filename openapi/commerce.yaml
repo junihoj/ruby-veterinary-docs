@@ -46,7 +46,7 @@ paths:
   /products/{slug}:
     get:
       tags: [Catalog]
-      summary: Product detail including variants and bundle contents
+      summary: Product detail; payload varies by type (variants, grouped members, composite slots, external link, flags)
       operationId: getProduct
       security: []
       parameters:
@@ -114,6 +114,17 @@ paths:
                 petId:
                   type: string
                   description: Required when the variant's product requires a pet claim
+                components:
+                  type: array
+                  description: Required for composite products; slot selections
+                  items:
+                    type: object
+                    required: [slotId, productId, variantId, quantity]
+                    properties:
+                      slotId: { type: string }
+                      productId: { type: string }
+                      variantId: { type: string }
+                      quantity: { type: integer, minimum: 1 }
       responses:
         '201':
           description: Added
@@ -180,7 +191,7 @@ paths:
             schema:
               type: object
               properties:
-                fulfilmentMethod: { type: string, enum: [ship, pickup] }
+                fulfilmentMethod: { type: string, enum: [ship, pickup, digital] }
                 shippingAddress:
                   type: object
                   properties:
@@ -216,7 +227,7 @@ paths:
               type: object
               required: [fulfilmentMethod]
               properties:
-                fulfilmentMethod: { type: string, enum: [ship, pickup] }
+                fulfilmentMethod: { type: string, enum: [ship, pickup, digital] }
                 shippingAddress:
                   type: object
                   properties:
@@ -278,6 +289,48 @@ paths:
               schema: { $ref: '#/components/schemas/ApiResponse' }
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /orders/{id}/downloads:
+    get:
+      tags: [Orders]
+      summary: Downloadable files granted on the order
+      operationId: listOrderDownloads
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: ord_01H... }
+      responses:
+        '200':
+          description: Grants with remaining counts and expiry
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /downloads/{grantId}/url:
+    post:
+      tags: [Orders]
+      summary: Issue a short-lived signed URL for one granted file
+      operationId: issueDownloadUrl
+      parameters:
+        - name: grantId
+          in: path
+          required: true
+          schema: { type: string, example: dgr_01H... }
+      responses:
+        '200':
+          description: Signed URL
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
   /subscriptions:
@@ -381,7 +434,12 @@ paths:
                 slug: { type: string }
                 summary: { type: string }
                 descriptionMd: { type: string }
-                productType: { type: string, enum: [single, variable, bundle] }
+                productType: { type: string, enum: [simple, variable, grouped, external, composite] }
+                isVirtual: { type: boolean }
+                isDownloadable: { type: boolean }
+                pricingMode: { type: string, enum: [fixed, sum], description: Composite only }
+                externalUrl: { type: string, format: uri, description: External only }
+                buttonText: { type: string, description: External only }
                 requiresPrescription: { type: boolean }
                 requiresPetClaim: { type: boolean }
       responses:
@@ -493,6 +551,59 @@ components:
       required: [error]
       properties:
         error: { $ref: '#/components/schemas/ErrorBody' }
+    CompositeSlot:
+      type: object
+      required: [id, name, position, minSelect, maxSelect]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        position: { type: integer }
+        minSelect: { type: integer, minimum: 0 }
+        maxSelect: { type: integer, minimum: 1 }
+    CompositeSlotOption:
+      type: object
+      required: [id, productId, quantity, sortOrder]
+      properties:
+        id: { type: string }
+        productId: { type: string }
+        componentVariantId: { type: string, nullable: true }
+        quantity: { type: integer, minimum: 1 }
+        priceOverride: { type: string, description: Decimal string; null = candidate price }
+        sortOrder: { type: integer }
+    GroupedMember:
+      type: object
+      required: [productId, sortOrder]
+      properties:
+        productId: { type: string }
+        sortOrder: { type: integer }
+    DownloadFile:
+      type: object
+      required: [id, fileName, fileSizeBytes, mimeType]
+      properties:
+        id: { type: string }
+        fileName: { type: string }
+        fileSizeBytes: { type: integer }
+        mimeType: { type: string }
+        sortOrder: { type: integer }
+    DownloadGrant:
+      type: object
+      required: [id, downloadsUsed]
+      properties:
+        id: { type: string, example: dgr_01H... }
+        productId: { type: string }
+        downloadsUsed: { type: integer }
+        maxDownloads: { type: integer, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        revoked: { type: boolean }
+    CartItemComponent:
+      type: object
+      required: [slotId, productId, variantId, quantity]
+      properties:
+        slotId: { type: string }
+        productId: { type: string }
+        variantId: { type: string }
+        quantity: { type: integer, minimum: 1 }
   responses:
     BadRequest:
       description: VALIDATION_FAILED

@@ -27,7 +27,7 @@ Specifies exactly which context owns each data domain, event, API surface, datab
 | Publishing | articles, categories, tags, media_assets, newsletter_subscribers | staff profiles (reads them) |
 | Care Coordination | appointment_requests, intake_submissions, history_uploads, form_submission_alerts | patient records, orders |
 | Client & Patient Records | clients, pets, medical_history_records, primary_veterinarian_links | identity credentials, commerce state |
-| Commerce | products, variants, bundles, carts, orders, payments, subscriptions | prescription decisions, pet records |
+| Commerce | products, variants, composite slots, grouped members, download files, carts, orders, payments, subscriptions | prescription decisions, pet records |
 | Pharmacy Authorisation | prescription_requests, prescription_decisions, rx_audit_log | order state (emits events) |
 | Care Messaging | conversations, inbox_messages, bot_rules, menu_flows, handover_sessions | appointment records (emits events) |
 | Notifications | notifications, delivery_channels, delivery_attempts, alert_subscriptions | business objects it reports on |

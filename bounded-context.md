@@ -74,7 +74,7 @@ It turns the domains in `domain-model.md` into deployable and ownership boundari
 
 | Context | Why It Is Core |
 |---------|----------------|
-| **Commerce** | Owns the online revenue line, including variable products, bundles, and subscriptions |
+| **Commerce** | Owns the online revenue line, including all seven product types (simple, variable, grouped, external, virtual, downloadable, composite), and subscriptions |
 | **Pharmacy Authorisation** | The clinical safety guardrail; the clinic's licence to sell prescription items online |
 | **Care Messaging** | Always-on triage with a guaranteed human path; the clinic's after-hours presence |
 | **Care Coordination** | Turns traffic into booked appointments and accepted clients |
@@ -139,7 +139,7 @@ The deepest chain is Commerce -> Pharmacy Authorisation -> Client & Patient Reco
 | Publishing | articles, categories, tags, newsletter subscribers | staff profiles (reads them) |
 | Care Coordination | appointment requests, intake submissions, uploads | patient records, orders |
 | Client & Patient Records | clients, pets, history, primary-vet links | identity credentials, commerce state |
-| Commerce | products, variants, bundles, carts, orders, payments, subscriptions | prescription decisions, pet records |
+| Commerce | products, variants, composite slots, grouped members, download files, carts, orders, payments, subscriptions | prescription decisions, pet records |
 | Pharmacy Authorisation | prescription requests, decisions, audit trail | order state (emits events instead) |
 | Care Messaging | conversations, bot rules, menus, handover, schedules | appointment records (emits events) |
 | Notifications | notifications, delivery attempts, alert subscriptions | business objects it only reports on |

@@ -151,16 +151,18 @@ Error `code` values are stable API surface: clients branch on `code`, never on `
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | `GET` | `/api/v1/products` | Public | Filter by pet type, life stage, condition; category facets |
-| `GET` | `/api/v1/products/:slug` | Public | Product detail incl. variants and bundle contents |
-| `GET`/`POST`/`PATCH`/`DELETE` | `/api/v1/cart`, `/api/v1/cart/items` | Bearer | Persistent cart |
-| `POST` | `/api/v1/checkout/quote` | Bearer | Totals: tax, shipping, pickup |
+| `GET` | `/api/v1/products/:slug` | Public | Product detail; payload varies by type: variants (simple/variable), members (grouped), slots + options (composite), external URL/button (external), virtual/downloadable flags |
+| `GET`/`POST`/`PATCH`/`DELETE` | `/api/v1/cart`, `/api/v1/cart/items` | Bearer | Persistent cart; composite lines carry a `components` selection |
+| `POST` | `/api/v1/checkout/quote` | Bearer | Totals: tax, shipping, pickup; composite lines re-priced from selected options |
 | `POST` | `/api/v1/checkout` | Bearer | Place order; returns `PRESCRIPTION_PENDING` when Rx items present |
 | `GET` | `/api/v1/orders` | Bearer | Order history with fulfilment state |
-| `GET` | `/api/v1/orders/:id` | Bearer | Single order incl. Rx status |
-| `POST`/`PATCH`/`DELETE` | `/api/v1/subscriptions` | Bearer | Auto-refill management |
-| `POST` | `/api/v1/admin/products` etc. | Staff (`catalog:write`) | Catalog maintenance |
+| `GET` | `/api/v1/orders/:id` | Bearer | Single order incl. Rx status and download grants |
+| `GET` | `/api/v1/orders/:id/downloads` | Bearer | Downloadable files granted on the order, with remaining counts and expiry |
+| `POST` | `/api/v1/downloads/:grantId/url` | Bearer | Issue a short-lived signed URL for one granted file (ADR-0009) |
+| `POST`/`PATCH`/`DELETE` | `/api/v1/subscriptions` | Bearer | Auto-refill management (physical simple/variable products only) |
+| `POST` | `/api/v1/admin/products` etc. | Staff (`catalog:write`) | Catalog maintenance across all seven product types |
 
-Checkout accepts an `Idempotency-Key`; stock is reserved per variant (`STOCK_CHANGED` on conflict).
+Checkout accepts an `Idempotency-Key`; stock is reserved per variant or composite component (`STOCK_CHANGED` on conflict). `fulfilmentMethod` is `ship`, `pickup`, or `digital` (digital when every line is virtual/downloadable).
 
 ## Pharmacy Authorisation API
 

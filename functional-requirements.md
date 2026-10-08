@@ -52,10 +52,14 @@
 - [ ] **Smart Filter & Search**: Search bar functionality with filters allowing pet owners to sort items by pet type (Cat/Dog), life stage, or health condition. -->
 
 #### Product Catalog & Browsing
-- [ ] **Diverse Product Type Architecture**: Support for flexible product configurations including:
-  - **Single Products**: Simple standalone items with a single price and configuration (e.g., a specific pet toy or a book).
+- [ ] **Diverse Product Type Architecture**: Support for the seven WooCommerce product types:
+  - **Simple Products**: Standalone items with a single price and configuration (e.g., a specific pet toy or a book).
   - **Variable Products**: Single items that offer customer choices such as size, weight dosage, or color, where each variation can have its own price, SKU, and stock count (e.g., a flea preventative offered in 0–5kg, 5–10kg, and 10–20kg versions).
-  - **Composite Products / Bundles**: Multi-item packages grouped together under one price or a dynamic combined price, letting owners buy a full kit at once (e.g., a "Puppy Welcome Kit" containing a specific food bag, a vitamin supplement, and a chew toy).
+  - **Grouped Products**: Curated sets of related simple products displayed together (e.g., a "Puppy Essentials" collection), where each member keeps its own price, SKU, and stock and is added to the cart individually.
+  - **External / Affiliate Products**: Partner items that link out to an external purchase page (e.g., a referral product); never added to the cart, never prescription-only, no on-site stock.
+  - **Virtual Products**: Non-physical items excluded from shipping weight and physical fulfilment (e.g., a gift card or clinic credit).
+  - **Downloadable Products**: Digital files (e.g., printable care guides or diet plans) granted through signed URLs after payment, with optional download limits and expiry.
+  - **Composite Products**: Configurable kits built from component slots (e.g., a "Puppy Welcome Kit" where the owner picks one food bag, one supplement, and up to two toys); slots define min/max selections, and pricing is either a fixed kit price or the sum of selected options.
 - [ ] **Categorized Inventory Grid**: Multi-category online storefront organizing products into logical groups like Prescription Medication, Therapeutic Diets, and General Pet Supplies.
 - [ ] **Detailed Product Pages**: Clean item pages displaying high-quality product images, dosage/weight variables, clear specifications, and live pricing.
 - [ ] **Smart Filter & Search**: Search bar functionality with filters allowing pet owners to sort items by pet type (Cat/Dog), life stage, or health condition.
