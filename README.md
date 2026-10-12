@@ -57,6 +57,7 @@ This repository is the specification source of truth for the product. The implem
 | [engineering-guidelines.md](engineering-guidelines.md) | Coding standards, workflows, quality gates, repository conventions |
 | [database/](database/) | Database architecture, migrations, performance, backup and recovery |
 | [data-model/](data-model/) | Per-context table models: entities, types, invariants, indexes |
+| [implementations/](implementations/) | Implementation plans sequencing spec into code |
 | [openapi/](openapi/) | OpenAPI 3.1 specs mirroring the API contract |
 | [strategic-architecture/](strategic-architecture/) | Context map, event flows, ownership matrices, architecture rules |
 | [ui-ux/](ui-ux/) | Design system, components, accessibility, emergency patterns, Stitch prompts |
@@ -85,13 +86,14 @@ This repository is the specification source of truth for the product. The implem
 
 1. `architectural-decision-record.md` - why the stack is what it is
 2. `api-architecture.md` - how the API is shaped in code
-3. `api-specification.md` - contracts between services
-4. `domain-model.md` and `bounded-context.md` - how the system is carved up
-5. `strategic-architecture/` - context map, events, ownership, rules
-6. `engineering-guidelines.md` - how we work
-7. `database/` - persistence decisions
-8. `deployment-architecture.md` - where everything runs and how it ships
-9. `ui-ux/` - design system and emergency patterns
+3. `implementations/api-plan.md` - build sequence and milestone gates
+4. `api-specification.md` - contracts between services
+5. `domain-model.md` and `bounded-context.md` - how the system is carved up
+6. `strategic-architecture/` - context map, events, ownership, rules
+7. `engineering-guidelines.md` - how we work
+8. `database/` - persistence decisions
+9. `deployment-architecture.md` - where everything runs and how it ships
+10. `ui-ux/` - design system and emergency patterns
 
 ### For Product and Clinic Stakeholders
 
@@ -132,6 +134,7 @@ ruby-veterinary-docs/
 |-- openapi/                           # OpenAPI 3.1 specs
 |-- strategic-architecture/            # Context map, events, ownership, rules
 |-- ui-ux/                             # Design system, components, a11y, prompts
+|-- implementations/                   # Implementation plans (API build)
 `-- diagrams/                          # Reserved for rendered diagrams (planned)
 ```
 
