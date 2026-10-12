@@ -176,7 +176,7 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 | SMS only | Loses the menu and conversation experience the requirements specify |
 
 - **Rationale:** Compliance requirement in `non-functional-requirements.md` (WhatsApp Integrity), and the API is what makes webhooks and bot latency targets achievable.
-- **Consequences:** Business verification lead time sits on the Phase 3 critical path (tracked in `prd.md` risks).
+- **Consequences:** Business verification lead time sits on the Phase 6 critical path (tracked in `prd.md` risks).
 
 ## ADR-0009 - Object Storage for Uploads and Media
 

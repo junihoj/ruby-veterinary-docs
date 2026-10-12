@@ -224,7 +224,7 @@ Qualitative signals and the binding numeric targets live in `vision.md` section 
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| WhatsApp Business API approval delayed | Phase 3 slips | Ship P1-P2 without it; fall back to click-to-chat deep links; degradation path defined |
+| WhatsApp Business API approval delayed | Phase 6 slips | Ship P1-P2 without it; fall back to click-to-chat deep links; degradation path defined |
 | Payment gateway integration issues | Revenue blocked | Use a mainstream tokenised provider; test with sandbox first; never handle card data ourselves |
 | Prescription workflow rejected by staff UX | P5 slips | Prototype review screen early with a real veterinarian; keep manual override always available |
 | Content stagnation after launch | SEO value lost | Category/tag structure and author profiles ship with the CMS so publishing is frictionless |

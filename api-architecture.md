@@ -266,7 +266,7 @@ External-system ports are **owned where they are used** (e.g. `PaymentGatewayPor
 | Money | `numeric(10,2)` in the database; `Money` VO in code; never floats |
 | IDs | DB generates UUIDs; API serialises prefixed opaque strings; never sequential integers |
 | Migrations | `prisma migrate` output committed, reviewed, never edited after merge (`database/migrations.md`) |
-| Idempotency store | `operations.idempotency_keys` table, added to `data-model/operations.md` when Commerce lands (Phase 3) |
+| Idempotency store | `operations.idempotency_keys` table, added to `data-model/operations.md` when Commerce lands (Phase 3a) |
 
 ---
 
@@ -322,12 +322,14 @@ Linter violations of 1, 5, and 6 fail CI.
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Contract** (this document) | ADR-0015, `api-architecture.md`, guidelines/README updates | Docs committed; ADR-0004 superseded |
-| **1 — Foundation** | `main.ts`, config, shared kernel + cross-cutting, Prisma + 10 namespaces, `docker-compose.dev.yml`, 10 module stubs with facade port stubs, eslint boundaries | `build`/`lint`/`test` green; health endpoint on `/api/v1` |
+| **1 — Foundation** | `main.ts`, config, shared kernel + cross-cutting, Prisma + 10 namespaces + all 65 tables, `docker-compose.dev.yml` (postgres + minio), 10 module stubs with facade port stubs, eslint boundaries | `build`/`lint`/`test` green; health endpoint on `/api/v1`; fresh `migrate deploy` on empty DB |
 | **2 — Public reads** | Identity (register/login/refresh/logout/me, JWT, Argon2id, roles) + Clinic Content (clinic, services, staff, hours reads) | Auth e2e green; public reads cacheable, no session required |
-| **3 — Money path** | Commerce (cart, quote, checkout, orders) + Pharmacy Authorisation (queue, decisions, audit) | Rx guardrail + checkout idempotency e2e green; OpenAPI diff clean |
-| **4 — Care path** | Care Coordination (appointment requests, intake, signed uploads) + Client & Patient Records (clients, pets) | Intake upload flow; pet claim reachable from commerce |
-| **5 — Async path** | Care Messaging (WhatsApp webhook, handover) + Notifications + Operations (admin inbox reads, alerts) | 2s bot budget measured; idempotent webhook dedupe tested |
-| **6 — Content path** | Publishing (articles, categories, newsletter) | Public blog reads + newsletter subscribe |
+| **3a — Money path (core)** | Commerce catalog (all 7 product-type shapes: reads + admin CRUD), cart/quote/checkout for simple/variable/grouped/external/virtual, payments port + mock adapter, orders (ship/pickup), idempotency store; Rx items blocked at cart (`422 PRESCRIPTION_PENDING`) until Phase 5 | Store transacts end-to-end for general products; checkout idempotency e2e green; OpenAPI diff clean |
+| **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (MinIO signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
+| **4 — Care path** | Care Coordination (appointment requests, intake, signed uploads) + Client & Patient Records (clients, pets) + `EmailPort` for form routing | Intake upload flow; pet claim reachable from commerce |
+| **5 — Pharmacy** | Pharmacy Authorisation (queue, decisions, audit, patient association); **lifts the 3a Rx block**; Rx orders release to `paid` | Rx guardrail e2e green; no path moves Rx orders to `paid` without Pharmacy events |
+| **6 — Async path** | Care Messaging (WhatsApp webhook, handover) + Notifications + Operations (admin inbox reads, alerts) | 2s bot budget measured; idempotent webhook dedupe tested |
+| **7 — Content path** | Publishing (articles, categories, newsletter) | Public blog reads + newsletter subscribe |
 
 Each phase ends with docs-as-contract discipline: behaviour change ⇒ spec update in the same PR (`engineering-guidelines.md`).
 
