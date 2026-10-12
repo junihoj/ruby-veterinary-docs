@@ -41,6 +41,7 @@ specification documents first (docs-as-contract).
 | 6 | Products: 5 structural types (`simple\|variable\|grouped\|external\|composite`) + `is_virtual` / `is_downloadable` flags; **bundle folded into composite** (configurable slots, WooCommerce-style) | One structural taxonomy; bundles and composites share cart mechanics |
 | 7 | Subscription billing uses an **in-process `@nestjs/schedule` timer**; no ADR (Rule 7.4 covers queues/replicas, not in-process timers) | Smallest thing that works |
 | 8 | Phase 3a ships a **mock payment adapter** behind `PaymentGatewayPort`; the real provider adapter lands when sandbox credentials exist | ADR-0007 was always provider-swappable |
+| 9 | Status/enum-like columns are **`text` + application VOs** (not PostgreSQL enum types), following the table-level authority in `data-model/` | Value sets evolve without DDL; `database-architecture.md` guidance is satisfied by VOs at the edge (CHECK constraints can be added later if wanted) |
 
 ---
 
@@ -94,9 +95,10 @@ Tasks in order:
    `@nestjs/jwt`, `@nestjs/schedule`, `class-validator`, `class-transformer`,
    `argon2`; dev: `eslint-plugin-boundaries`.
 2. **Prisma:** `prisma.config.ts`; one `schema.prisma` with
-   `schemas = ["identity", "clinic_content", "publishing", "care_coordination",
-   "client_patient_records", "commerce", "pharmacy", "care_messaging",
-   "notifications", "operations"]`; all 65 models converted from
+   `schemas = ["identity", "content", "publishing", "intake",
+   "clients", "commerce", "pharmacy", "messaging",
+   "notifications", "operations"]` (names per `strategic-architecture/04-ownership-matrix.md`);
+   all 65 models converted from
    `data-model/*.md` (`@@schema`, `@@map`, uniques, indexes, plain string ids,
    no cross-schema `@relation`); partial indexes and check constraints that
    Prisma schema cannot express go in the migration as raw SQL; initial
