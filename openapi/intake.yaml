@@ -66,7 +66,7 @@ paths:
       operationId: signUpload
       description: |
         Returns a short-lived signed URL and object key. Client uploads directly
-        to MinIO; no file bytes pass through the API (ADR-0009).
+        to object storage (SeaweedFS); no file bytes pass through the API (ADR-0016).
         Accepted types: application/pdf, image/jpeg. Size cap: 10 MB.
       requestBody:
         required: true

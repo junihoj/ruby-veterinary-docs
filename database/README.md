@@ -36,7 +36,7 @@ To give one authoritative place for persistence decisions so that migrations, in
 | Primary database | PostgreSQL 16+ on the VPS | ADR-0003, ADR-0014 |
 | Access layer | Prisma 7 with `@prisma/adapter-pg`; repositories are the sole importers of `prisma.*` | ADR-0015, `../api-architecture.md` §8 |
 | Migrations | Prisma Migrate, version-controlled | `migrations.md` |
-| Large files | MinIO (S3-compatible) on the VPS, not the database | ADR-0009 |
+| Large files | SeaweedFS (S3-compatible) on the VPS, not the database | ADR-0016 |
 | Caching | Cloudflare CDN for public reads; in-process for hot queries | `performance.md` |
 | Backups | Daily to an offsite S3-compatible bucket on a separate provider | `backup-and-recovery.md` |
 

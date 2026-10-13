@@ -92,7 +92,7 @@ It does **not** own identity credentials, appointment requests, orders, or presc
 | date_of_birth | date | yes | Best effort |
 | weight_kg | numeric(6,2) | yes | Updated at visits |
 | microchip_id | text | yes | |
-| photo_object_key | text | yes | MinIO key |
+| photo_object_key | text | yes | SeaweedFS key |
 | notes | text | yes | Owner-visible notes field only; clinical detail stays in history records |
 | status | text | no | `active` \| `deceased` \| `deleted` |
 | created_at | timestamptz | no | |
@@ -115,7 +115,7 @@ It does **not** own identity credentials, appointment requests, orders, or presc
 | id | uuid | no | PK; serialised `mhr_…` |
 | pet_id | uuid | no | FK → `pets.id` |
 | title | text | no | e.g. `2025 vaccination card` |
-| object_key | text | no | MinIO key (owner upload or staff upload) |
+| object_key | text | no | SeaweedFS key (owner upload or staff upload) |
 | mime_type | text | no | `application/pdf`, `image/jpeg` |
 | byte_size | integer | no | |
 | source | text | no | `owner_upload` \| `staff_upload` \| `import` |

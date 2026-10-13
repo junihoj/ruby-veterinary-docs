@@ -205,7 +205,7 @@ It does **not** own prescription decisions (Pharmacy emits events back), pet rec
 | id | uuid | no | PK |
 | product_id | uuid | no | FK → `products.id` (downloadable) |
 | file_name | text | no | Display name |
-| object_key | text | no | MinIO object key (ADR-0009); never a public URL |
+| object_key | text | no | SeaweedFS object key (ADR-0016); never a public URL |
 | file_size_bytes | integer | no | |
 | mime_type | text | no | |
 | sort_order | integer | no | |

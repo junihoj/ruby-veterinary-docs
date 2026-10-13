@@ -28,7 +28,7 @@ The Care Coordination context owns:
 
 - Appointment requests (owner details, pet details, reason, preferred windows)
 - New-client intake submissions
-- History upload references (object keys; bytes live in MinIO)
+- History upload references (object keys; bytes live in SeaweedFS)
 - Form submission alerts routing into Notifications/Operations views
 
 It does **not** own client or pet records (those are written after acceptance into `clients`), identity accounts (registered users may pre-fill from Identity), or commerce state.
@@ -117,7 +117,7 @@ It does **not** own client or pet records (those are written after acceptance in
 | id | uuid | no | PK; serialised `upl_…` |
 | appointment_request_id | uuid | yes | FK → `appointment_requests.id` (same schema) |
 | intake_submission_id | uuid | yes | FK → `intake_submissions.id` |
-| object_key | text | no | MinIO key from signed upload (ADR-0009) |
+| object_key | text | no | SeaweedFS key from signed upload (ADR-0016) |
 | original_filename | text | yes | Display only; not a path |
 | mime_type | text | no | `application/pdf`, `image/jpeg` |
 | byte_size | integer | no | ≤ 10 MB enforced at sign time and finalise |
@@ -134,7 +134,7 @@ It does **not** own client or pet records (those are written after acceptance in
 **Invariants**
 
 - Exactly one of the two parent ids is set
-- Files are private in MinIO; clinic staff reach them through signed URLs issued by this context
+- Files are private in SeaweedFS; clinic staff reach them through signed URLs issued by this context
 - Rejected uploads never finalise into a parent record
 
 ## form_submission_alerts

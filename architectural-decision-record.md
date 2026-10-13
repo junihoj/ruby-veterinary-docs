@@ -180,7 +180,7 @@ Together with `bounded-context.md` (boundaries) and `api-specification.md` (cont
 
 ## ADR-0009 - Object Storage for Uploads and Media
 
-**Status:** Accepted
+**Status:** Superseded by ADR-0016
 
 - **Decision:** Client medical-history uploads (PDF/JPEG) and CMS media are stored in object storage, uploaded via short-lived signed URLs issued by the API, never through the API's own request body. Object storage runs as MinIO on the single VPS (ADR-0014) behind the S3 API, in private buckets.
 
@@ -319,6 +319,56 @@ One persistence stack across the organisation's NestJS services means the reposi
 ## Revisit When
 
 A context needs sustained hand-tuned SQL beyond what `$queryRaw` inside its own repository can express, or a Prisma release regresses driver-adapter or multi-schema behaviour. Either condition warrants a new ADR, not an informal switch.
+
+---
+
+## ADR-0016 - SeaweedFS for Object Storage (Supersedes ADR-0009)
+
+**Status:** Accepted
+
+**Supersedes:** ADR-0009
+
+## Context
+
+ADR-0009 chose MinIO for object storage because it was free, self-hosted, and S3-compatible. Between writing that ADR and starting implementation, MinIO became unusable as a dependency:
+
+1. MinIO, Inc. discontinued the self-hosted Community Edition; the CE repository was archived upstream in February 2026.
+2. The container images were deleted from Docker Hub in September 2026 — the `minio/minio` *repository itself* returns 404 from the registry API, so no tag (including `latest`) can be pulled.
+3. The official binary downloads at `dl.min.io` return HTTP 410 Gone.
+4. Mirror options are dead or frozen: `quay.io/minio/minio` is access-denied, `bitnami/minio` has zero tags, and `bitnamilegacy/minio` froze at August 2025 with no security updates.
+
+This was verified directly against the registry APIs and with the Docker CLI on 2026-10-13 (a bare `docker pull minio/minio` fails with "repository does not exist").
+
+## Decision
+
+- Object storage for uploads and media runs **SeaweedFS** (`chrislusf/seaweedfs`) behind its **S3-compatible API**, replacing MinIO.
+- Every architectural invariant from ADR-0009 is unchanged: signed short-lived direct uploads and downloads, no file bytes through the API, private buckets with per-object access control, the object-storage volume inside the off-site backup scope.
+- Images are **pinned by tag and digest** in `infrastructure/docker-compose.dev.yml` (e.g. `3.99@sha256:8d5b3239...`) — EOL taught us that a vanished upstream image must not break a fresh clone.
+- The application-facing port stays S3-shaped: the `ObjectStoragePort` adapter (M3b) speaks S3 to a configurable endpoint, so the storage implementation remains swappable without code changes — the exit path ADR-0009 wanted, now proven necessary.
+
+### Alternatives Considered
+
+| Option | Why Not |
+|--------|---------|
+| `bitnamilegacy/minio` (Aug-2025 freeze) | No security updates; repeats the same single-vendor trap that just fired |
+| Rebuild MinIO from archived source | We become the maintainers of an EOL storage engine; unacceptable risk for clinical uploads |
+| External S3 provider (R2/B2 class) | Still the cost-before-launch objection from ADR-0009; remains a later config change via the S3 port |
+| Flat files on local disk | Same objection as ADR-0009: no bucket semantics, no signed URLs, retention unenforceable |
+
+## Rationale
+
+SeaweedFS is actively maintained (images pushed same-day, signed, multi-arch), Apache-2.0, and S3-compatible for the operations this system needs: bucket CRUD, presigned PUT/GET, and object deletion. It runs as a single `weed server` process for dev and can scale to master/volume/filer topology on the VPS (ADR-0014) without changing the application contract.
+
+## Consequences
+
+- `infrastructure/docker-compose.dev.yml` carries the SeaweedFS service (S3 API on host port 8333, master UI on 9333) with a named data volume; it becomes part of the daily backup scope wherever the MinIO volume was named in `database/backup-and-recovery.md`.
+- Dev compose runs SeaweedFS's S3 endpoint without access keys (anonymous, localhost-only) — fine for development only; the deployment milestone must configure access keys and keep the S3 port off the public network.
+- S3 feature coverage is SeaweedFS's, not MinIO's: the M3b signed-upload e2e doubles as the compatibility proof for the exact operations used.
+- `api-specification.md` and the `openapi/` contract are unchanged; only the storage vendor behind the same S3 API differs.
+
+## Revisit When
+
+The team outgrows single-process SeaweedFS (needs erasure coding, multi-site replication, or lifecycle policies it lacks), or a trustworthy maintained S3-compatible server becomes the ecosystem default. Either condition warrants a new ADR; the port/adapter boundary means switching is a deploy-time change plus an adapter test, not a rewrite.
 
 ---
 

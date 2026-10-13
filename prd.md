@@ -155,7 +155,7 @@ Next.js 16 storefront + admin UI
    v
 NestJS 11 API (modular monolith)
    |            |             |              |
-PostgreSQL   MinIO object   Stripe-class    WhatsApp
+PostgreSQL   SeaweedFS S3   Stripe-class    WhatsApp
  (system of  storage        payment         Business API
   record)   (uploads)       (tokenised)     (verified)
                 \             |             /
@@ -171,7 +171,7 @@ Daily encrypted backups -> off-site S3-compatible bucket (separate provider)
 | Database | PostgreSQL, single system of record |
 | Payments | External tokenised gateway; card data never stored |
 | Messaging | Verified WhatsApp Business API plus a shared multi-agent inbox |
-| Storage | MinIO (S3-compatible) on the VPS for medical-history uploads and media |
+| Storage | SeaweedFS (S3-compatible) on the VPS for medical-history uploads and media |
 | Hosting | Single VPS under Docker Compose, behind Cloudflare (ADR-0014) |
 | Repositories | Three git submodules under `ruby-veterinary-service` |
 
@@ -243,7 +243,7 @@ Qualitative signals and the binding numeric targets live in `vision.md` section 
 | Transactional email delivery | Third-party SaaS | Form routing, alerts, newsletter |
 | Single VPS hosting provider (Ubuntu, Docker Compose) | Infrastructure | All modules (`deployment-architecture.md`) |
 | Cloudflare DNS/CDN | Third-party SaaS (free tier) | Edge TLS, static caching, DDoS protection |
-| Off-site backup bucket on a separate provider | Third-party SaaS | Daily PostgreSQL and MinIO backups |
+| Off-site backup bucket on a separate provider | Third-party SaaS | Daily PostgreSQL and SeaweedFS backups |
 
 ---
 

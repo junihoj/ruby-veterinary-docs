@@ -87,7 +87,7 @@ It does **not** own appointment records (raises events to Care Coordination on h
 | sender_type | text | no | `owner` \| `bot` \| `staff` |
 | sender_user_id | uuid | yes | Cross-schema ref by id for staff sends |
 | body_text | text | no | Plain text (rich media referenced separately) |
-| media_object_key | text | yes | MinIO key for media; never inline bytes |
+| media_object_key | text | yes | SeaweedFS key for media; never inline bytes |
 | media_mime | text | yes | |
 | status | text | no | `received` \| `sent` \| `delivered` \| `read` \| `failed` |
 | dedupe_key | text | no | Provider message id; unique |

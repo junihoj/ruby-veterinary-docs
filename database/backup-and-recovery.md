@@ -36,7 +36,7 @@ The first recovery priority is always the emergency surface (hours, phone, addre
 | Data | Method | Location |
 |------|--------|----------|
 | PostgreSQL (all schemas) | Continuous archiving (WAL) + nightly full logical backup | Encrypted, pushed daily to an offsite S3-compatible bucket on a **separate provider/account from the VPS** |
-| Object storage: MinIO volume (medical-history uploads, CMS media) | Daily export of the MinIO data volume | Same offsite bucket, encrypted |
+| Object storage: SeaweedFS volume (medical-history uploads, CMS media) | Daily export of the SeaweedFS data volume | Same offsite bucket, encrypted |
 | Application secrets and configuration | Encrypted copy of the VPS `.env` on each change | Password manager / secure offline storage - never on the VPS alone |
 | Application code and images | Rebuilt from git history by CI | Git hosting (and image tags retained on rollback) |
 | CDN-cached public pages | Not backed up | Regenerated on redeploy; Cloudflare serves stale cache during recovery |
@@ -49,7 +49,7 @@ The first recovery priority is always the emergency surface (hours, phone, addre
 | Full database | Nightly | 30 days |
 | Weekly full | Sunday | 12 weeks |
 | Monthly full | 1st of month | 12 months |
-| MinIO volume export | Nightly | 90 days for uploads; per CMS policy for media |
+| SeaweedFS volume export | Nightly | 90 days for uploads; per CMS policy for media |
 | Pre-deploy snapshot | Automatically before every migration batch | 7 days |
 
 Every job encrypts before upload and runs from the VPS to the offsite bucket; a job that fails to leave the VPS is treated as a failed backup.
@@ -117,7 +117,7 @@ Failures surface in the admin alert dashboard alongside other operational signal
 |----------|----------|
 | Single table or schema corruption | Point-in-time restore of the affected schema into a new database; replay writes; swap |
 | Full primary database loss | Restore from the offsite bucket onto the same VPS (or a fresh one), verify, restart the stack |
-| Total VPS loss (provider failure, destruction) | Provision a replacement VPS, rebuild the stack from compose files, restore PostgreSQL and MinIO from the offsite bucket, repoint Cloudflare DNS; static emergency content is served from edge cache throughout |
+| Total VPS loss (provider failure, destruction) | Provision a replacement VPS, rebuild the stack from compose files, restore PostgreSQL and SeaweedFS from the offsite bucket, repoint Cloudflare DNS; static emergency content is served from edge cache throughout |
 | Ransomware or malicious deletion | Break-glass restore from the offsite bucket's immutable/object-lock copies; rotate all credentials first |
 
 Because backups live on a separate provider from the VPS, the total-loss path never depends on the failed machine.

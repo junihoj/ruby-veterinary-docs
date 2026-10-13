@@ -37,11 +37,13 @@ specification documents first (docs-as-contract).
 | 2 | Architecture is a **pragmatic reni-verse subset** of clean/DDD/CQRS/facade/port-adapter — no event sourcing, projections, read store, UoW, or outbox | Complexity budget of a single clinic |
 | 3 | Build order: **Foundation → Public reads → Commerce → Care path → Pharmacy → Async path → Content path** | Pharmacy needs pets (Care path); PRD sequences general products (P4) before clinical commerce (P5) |
 | 4 | Commerce is staged in **two milestones**: 3a (core) then 3b (composite & digital) | Composite cart lines and downloads are the heavy commerce additions |
-| 5 | **All 65 Prisma tables** are created in Foundation with one initial migration | Schema completeness up front; behaviour fills in per milestone |
+| 5 | **All 64 Prisma tables** are created in Foundation with one initial migration (`dashboard_snapshots` deferred — its creation needs an ADR touch, per `data-model/operations.md`) | Schema completeness up front; behaviour fills in per milestone |
 | 6 | Products: 5 structural types (`simple\|variable\|grouped\|external\|composite`) + `is_virtual` / `is_downloadable` flags; **bundle folded into composite** (configurable slots, WooCommerce-style) | One structural taxonomy; bundles and composites share cart mechanics |
 | 7 | Subscription billing uses an **in-process `@nestjs/schedule` timer**; no ADR (Rule 7.4 covers queues/replicas, not in-process timers) | Smallest thing that works |
 | 8 | Phase 3a ships a **mock payment adapter** behind `PaymentGatewayPort`; the real provider adapter lands when sandbox credentials exist | ADR-0007 was always provider-swappable |
 | 9 | Status/enum-like columns are **`text` + application VOs** (not PostgreSQL enum types), following the table-level authority in `data-model/` | Value sets evolve without DDL; `database-architecture.md` guidance is satisfied by VOs at the edge (CHECK constraints can be added later if wanted) |
+| 10 | Dev infrastructure compose lives in the **parent repository** (`ruby-veterinary-service/infrastructure/`), not in `ruby-veterinary-api` | The compose file is workspace-level tooling; the API repo stays deployable without it |
+| 11 | Object storage is **SeaweedFS** behind the S3 API, pinned by tag + digest in the dev compose (ADR-0016 supersedes ADR-0009's MinIO) | MinIO CE is EOL; images deleted from Docker Hub, `dl.min.io` returns 410 (verified 2026-10-13); SeaweedFS is actively maintained and S3-compatible |
 
 ---
 
@@ -52,10 +54,10 @@ Mirrors `api-architecture.md` §12 (amended by Milestone 0).
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Contract** | Amend `api-architecture.md` §12 to this table; fix three phase cross-references | Docs committed; gitlink bumped |
-| **1 — Foundation** | `main.ts`, config, shared kernel + cross-cutting, Prisma + 10 namespaces + all 65 tables, `docker-compose.dev.yml` (postgres + minio), 10 module stubs with facade port stubs, eslint boundaries | `build`/`lint`/`test` green; health on `/api/v1`; fresh `migrate deploy` on empty DB |
+| **1 — Foundation** | `main.ts`, config, shared kernel + cross-cutting, Prisma + 10 namespaces + all 64 tables, dev compose in parent `infrastructure/` (postgres + seaweedfs), 10 module stubs with facade port stubs, eslint boundaries | `build`/`lint`/`test` green; health on `/api/v1`; fresh `migrate deploy` on empty DB |
 | **2 — Public reads** | Identity (register/login/refresh/logout/me, JWT, Argon2id, roles) + Clinic Content (clinic, services, staff, hours) | Auth e2e green; public reads cacheable, no session required |
 | **3a — Money path (core)** | Commerce catalog (all 7 type shapes: reads + admin CRUD), cart/quote/checkout for simple/variable/grouped/external/virtual, payments port + mock adapter, orders (ship/pickup), idempotency store; Rx items blocked at cart (`422 PRESCRIPTION_PENDING`) until Phase 5 | Store transacts end-to-end for general products; checkout idempotency e2e green; OpenAPI diff clean |
-| **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (MinIO signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
+| **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (SeaweedFS signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
 | **4 — Care path** | Care Coordination (appointment requests, intake, signed uploads) + Client & Patient Records (clients, pets) + `EmailPort` console adapter for form routing | Intake upload flow; pet claim reachable from commerce |
 | **5 — Pharmacy** | Pharmacy Authorisation (queue, decisions, audit, patient association); **lifts the 3a Rx block**; Rx orders release to `paid` | Rx guardrail e2e green; no path moves Rx orders to `paid` without Pharmacy events |
 | **6 — Async path** | Care Messaging (WhatsApp webhook, handover) + Notifications + Operations (admin inbox, alerts) | 2s bot budget measured; idempotent webhook dedupe tested |
@@ -98,12 +100,14 @@ Tasks in order:
    `schemas = ["identity", "content", "publishing", "intake",
    "clients", "commerce", "pharmacy", "messaging",
    "notifications", "operations"]` (names per `strategic-architecture/04-ownership-matrix.md`);
-   all 65 models converted from
+   all 64 models converted from
    `data-model/*.md` (`@@schema`, `@@map`, uniques, indexes, plain string ids,
    no cross-schema `@relation`); partial indexes and check constraints that
    Prisma schema cannot express go in the migration as raw SQL; initial
    migration; seed skeleton (roles, facets, clinic hours).
-3. **`docker-compose.dev.yml`:** postgres:16 + MinIO, healthchecks, volumes.
+3. **Dev compose (parent repo `ruby-veterinary-service/infrastructure/`):**
+   postgres:16 + SeaweedFS (S3 API, pinned by tag + digest — ADR-0016),
+   healthchecks, volumes.
 4. **`src/config/`:** validated env (`DATABASE_URL`, `PORT`, JWT secrets
    required; provider keys optional).
 5. **`src/prisma/`:** global `PrismaService` with lifecycle hooks.
@@ -157,7 +161,8 @@ middleware + `operations.idempotency_keys` (table added to
 Composite cart lines: slot min/max validation, `fixed`/`sum` pricing with
 `price_override`, component stock reservation, `order_item_components`
 snapshot, pick list; derived Rx flags (OR of slot options — still blocked).
-Downloadable purchases: staff file upload via signed URL (ADR-0009), digital
+Downloadable purchases: staff file upload via signed URL (SeaweedFS S3 API,
+ADR-0016), digital
 fulfilment when every line is virtual/downloadable, `product_download_grants`
 issued on `PaymentCaptured`, `GET /orders/:id/downloads` +
 `POST /downloads/:grantId/url`. Subscriptions: create/pause/cancel, physical
@@ -226,9 +231,9 @@ publish events. Public reads cacheable per Rule 7.2.
 | Document | Relationship |
 |----------|-------------|
 | `api-architecture.md` | Binding code contract; §12 phases are amended by M0 of this plan |
-| `architectural-decision-record.md` | ADR-0002, ADR-0003, ADR-0007, ADR-0009, ADR-0011, ADR-0012, ADR-0015 |
+| `architectural-decision-record.md` | ADR-0002, ADR-0003, ADR-0007, ADR-0011, ADR-0012, ADR-0015, ADR-0016 (ADR-0009 superseded) |
 | `api-specification.md` | Envelopes, error codes, idempotency, pagination |
-| `data-model/` | Source of the 65-table Prisma conversion |
+| `data-model/` | Source of the 64-table Prisma conversion (`dashboard_snapshots` deferred) |
 | `openapi/` | CI contract for the Swagger export |
 | `database/migrations.md` | Migration rules for `prisma migrate` output |
 | `engineering-guidelines.md` | Daily practice, commit conventions, review checklist |

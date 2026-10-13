@@ -47,7 +47,7 @@ Trigger: website form. No account required. Degradation: if alert delivery fails
 
 ```
 Owner completes intake form, optionally signs upload
-  → POST /uploads/sign (Intake) → owner PUTs to MinIO
+  → POST /uploads/sign (Intake) → owner PUTs to SeaweedFS
   → IntakeSubmission created (historyUploadIds attached)
   → publishes IntakeSubmitted
   → Notifications alerts staff

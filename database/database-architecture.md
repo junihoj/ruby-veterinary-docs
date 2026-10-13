@@ -54,7 +54,7 @@ Medical-history PDFs/JPEGs and CMS media live in object storage (ADR-0009). The 
 | Store | Holds | Notes |
 |-------|-------|-------|
 | PostgreSQL 16+ | All structured business data | One instance on the VPS, schema-per-context |
-| MinIO object storage | History uploads, CMS media | On the VPS behind the S3 API (ADR-0009/0014); private buckets, signed URLs, volume exported to the offsite backup bucket |
+| SeaweedFS object storage | History uploads, CMS media | On the VPS behind the S3 API (ADR-0016/0014); private buckets, signed URLs, volume exported to the offsite backup bucket |
 | Cloudflare CDN | Rendered public pages, images | Served in front of the VPS; not a data store; invalidated on publish |
 | Application memory | Session state, hot catalog reads | Loss is always safe |
 

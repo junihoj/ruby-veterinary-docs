@@ -58,7 +58,7 @@ It does **not** own staff profile records (Clinic Content) or email delivery mec
 | title | text | no | |
 | excerpt | text | yes | Card/listing summary |
 | body_md | text | no | Markdown with embedded media refs |
-| cover_object_key | text | yes | MinIO key |
+| cover_object_key | text | yes | SeaweedFS key |
 | status | text | no | `draft` \| `published` \| `archived` |
 | category_id | uuid | yes | FK → `categories.id` (same schema) |
 | author_profile_id | uuid | yes | Cross-schema ref by id → `content.staff_profiles.id` |
@@ -136,7 +136,7 @@ It does **not** own staff profile records (Clinic Content) or email delivery mec
 | Attribute | Type | Null | Notes |
 |-----------|------|------|-------|
 | id | uuid | no | PK |
-| object_key | text | no | MinIO key (ADR-0009) |
+| object_key | text | no | SeaweedFS key (ADR-0016) |
 | mime_type | text | no | `image/jpeg`, `image/png`, `image/webp` |
 | byte_size | integer | no | |
 | alt_text | text | no | Accessibility: required for every embedded image |

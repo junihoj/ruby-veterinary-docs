@@ -34,7 +34,7 @@ One NestJS process. Ten bounded contexts, each an internal Nest module with hard
 | DDD | Aggregates and value objects **only where invariants exist**; contexts without rich rules skip `domain/` entirely |
 | CQRS | `@nestjs/cqrs` command/query split; one database; queries are plain reads through repositories |
 | Facade | Every context exposes exactly one `*FacadePort` + `*Facade` — its public API for other modules |
-| Port & adapter | Outbound ports for external systems (payments, WhatsApp, email, MinIO) and inbound facade ports wired through in-process adapters |
+| Port & adapter | Outbound ports for external systems (payments, WhatsApp, email, object storage) and inbound facade ports wired through in-process adapters |
 | Integration events | Cross-context collaboration on an in-process bus; past-tense, idempotent consumers |
 
 **Deliberately not built:** event sourcing, projections, separate read stores, unit of work, outbox framework, microservices. These are absent in both the reference platform and our scale assumptions (single clinic, single VPS, hundreds of SKUs); Rule 7.4 requires an ADR before queues or replicas anyway.
@@ -50,11 +50,10 @@ ruby-veterinary-api/
 │   ├── migrations/                 # prisma migrate output, versioned
 │   └── seed.ts
 ├── prisma.config.ts
-├── docker-compose.dev.yml          # PostgreSQL 16 for local dev
 ├── src/
 │   ├── main.ts                     # /api/v1 prefix, ValidationPipe, Swagger, CORS
 │   ├── app.module.ts               # @Global; imports all context modules
-│   ├── config/                     # env schema + validated config (app, db, jwt, minio, whatsapp, payment)
+│   ├── config/                     # env schema + validated config (app, db, jwt, storage, whatsapp, payment)
 │   ├── prisma/                     # prisma.module.ts (global), prisma.service.ts
 │   ├── shared/
 │   │   ├── kernel/                 # AggregateRoot, Entity, ValueObject, Result, PrefixedId
@@ -77,7 +76,7 @@ ruby-veterinary-api/
 └── test/                           # e2e (jest + supertest)
 ```
 
-Module folder names match `bounded-context.md`; the PostgreSQL schema each owns matches `strategic-architecture/04-ownership-matrix.md`.
+Module folder names match `bounded-context.md`; the PostgreSQL schema each owns matches `strategic-architecture/04-ownership-matrix.md`. Development infrastructure (PostgreSQL 16 + SeaweedFS) is not part of the API tree — it lives in the parent repository at `ruby-veterinary-service/infrastructure/`.
 
 ---
 
@@ -104,7 +103,7 @@ modules/<ctx>/
 │   ├── repositories/               # concrete @Injectable classes wrapping PrismaService
 │   ├── adapters/
 │   │   ├── in-process/             # adapters implementing ANOTHER context's facade port
-│   │   └── <external-system>/      # payment-gateway/, whatsapp/, email/, minio/
+│   │   └── <external-system>/      # payment-gateway/, whatsapp/, email/, storage/
 │   ├── mappers/                    # Prisma model → response shape (static classes)
 │   └── event-consumers/            # @IntegrationEventHandler classes (idempotent)
 └── presentation/
@@ -238,7 +237,7 @@ Wiring: consumer module binds `{ provide: X_FACADE_PORT, useClass: XFacadeInProc
 | `PaymentGatewayPort` | stripe/paystack-class adapter + router | ADR-0007; no card data; idempotent webhooks |
 | `WhatsAppPort` | WhatsApp Business API adapter | ADR-0008; signature verification; 2s bot budget |
 | `EmailPort` | transactional provider adapter | ADR-0013; failures alert, never fail requests |
-| `ObjectStoragePort` | MinIO S3 adapter | ADR-0009; signed direct uploads, no file bytes through API |
+| `ObjectStoragePort` | SeaweedFS S3 adapter | ADR-0016 (supersedes ADR-0009); signed direct uploads, no file bytes through API |
 | `IntegrationEventPublisher` | in-process adapter over `EventBus` | shared kernel port |
 
 External-system ports are **owned where they are used** (e.g. `PaymentGatewayPort` in commerce) unless genuinely shared (`IntegrationEventPublisher`).
@@ -322,10 +321,10 @@ Linter violations of 1, 5, and 6 fail CI.
 | Phase | Scope | Exit criteria |
 |-------|-------|---------------|
 | **0 — Contract** (this document) | ADR-0015, `api-architecture.md`, guidelines/README updates | Docs committed; ADR-0004 superseded |
-| **1 — Foundation** | `main.ts`, config, shared kernel + cross-cutting, Prisma + 10 namespaces + all 65 tables, `docker-compose.dev.yml` (postgres + minio), 10 module stubs with facade port stubs, eslint boundaries | `build`/`lint`/`test` green; health endpoint on `/api/v1`; fresh `migrate deploy` on empty DB |
+| **1 — Foundation** | `main.ts`, config, shared kernel + cross-cutting, Prisma + 10 namespaces + all 64 tables, dev compose in parent `infrastructure/` (postgres + seaweedfs), 10 module stubs with facade port stubs, eslint boundaries | `build`/`lint`/`test` green; health endpoint on `/api/v1`; fresh `migrate deploy` on empty DB |
 | **2 — Public reads** | Identity (register/login/refresh/logout/me, JWT, Argon2id, roles) + Clinic Content (clinic, services, staff, hours reads) | Auth e2e green; public reads cacheable, no session required |
 | **3a — Money path (core)** | Commerce catalog (all 7 product-type shapes: reads + admin CRUD), cart/quote/checkout for simple/variable/grouped/external/virtual, payments port + mock adapter, orders (ship/pickup), idempotency store; Rx items blocked at cart (`422 PRESCRIPTION_PENDING`) until Phase 5 | Store transacts end-to-end for general products; checkout idempotency e2e green; OpenAPI diff clean |
-| **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (MinIO signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
+| **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (SeaweedFS signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
 | **4 — Care path** | Care Coordination (appointment requests, intake, signed uploads) + Client & Patient Records (clients, pets) + `EmailPort` for form routing | Intake upload flow; pet claim reachable from commerce |
 | **5 — Pharmacy** | Pharmacy Authorisation (queue, decisions, audit, patient association); **lifts the 3a Rx block**; Rx orders release to `paid` | Rx guardrail e2e green; no path moves Rx orders to `paid` without Pharmacy events |
 | **6 — Async path** | Care Messaging (WhatsApp webhook, handover) + Notifications + Operations (admin inbox reads, alerts) | 2s bot budget measured; idempotent webhook dedupe tested |

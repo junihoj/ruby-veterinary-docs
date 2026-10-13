@@ -41,7 +41,7 @@ Event delivery inside the process uses the in-process event bus with durable han
 | Payment gateway webhook | HTTPS webhook | Provider signature | At-least-once | Idempotent by provider event id; failures surface in dashboard; checkout degrades to 503 with phone fallback |
 | Email delivery | SMTP/API via adapter | Provider creds in VPS env | At-least-once with bounded retries | Failed attempts alert; dashboard remains system of record |
 | WhatsApp outbound (staff/bot) | Business Cloud API | Provider creds in VPS env | Provider-defined | Retry then mark failed; conversation shows send failure |
-| MinIO object storage | S3 API (local) | Access keys in VPS env | Request/response | Uploads fail closed; signed URLs short-lived |
+| SeaweedFS object storage | S3 API (local) | Access keys in VPS env | Request/response | Uploads fail closed; signed URLs short-lived |
 | Cloudflare CDN | HTTPS edge | Zone API token | n/a | Origin serve-through; stale-while-revalidate for public cache |
 
 ---

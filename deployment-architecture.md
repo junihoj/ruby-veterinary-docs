@@ -55,18 +55,18 @@ It records the operational consequence of ADR-0014. Database-level recovery deta
         |  | PostgreSQL 16 (internal only, :5432)       |  |
         |  +--------------------------------------------+  |
         |  +------------------------------+---------------+|
-        |  | MinIO (S3 API, signed URLs)  | Docker volumes||
+        |  | SeaweedFS (S3 API, signed URLs)| Docker volumes||
         |  +------------------------------+---------------+|
         |  swap 2 GB | log rotation | healthchecks         |
         +--------------------------------------------------+
                        |
-        daily encrypted backup job (pg_dump + MinIO volume)
+        daily encrypted backup job (pg_dump + SeaweedFS volume)
                        |
               Offsite S3-compatible bucket
            (separate provider/account from the VPS)
 ```
 
-Only nginx's ports 80/443 are reachable from the internet (plus SSH restricted to known IPs). PostgreSQL, MinIO, the API, and the frontend bind to the internal Docker network or `127.0.0.1`.
+Only nginx's ports 80/443 are reachable from the internet (plus SSH restricted to known IPs). PostgreSQL, SeaweedFS, the API, and the frontend bind to the internal Docker network or `127.0.0.1`.
 
 ---
 
@@ -90,7 +90,7 @@ No staging environment at this scale. Changes that touch payments, prescriptions
 | Frontend | `ruby-veterinary-web-frontend` container, port 3001 | ADR-0005 |
 | API | `ruby-veterinary-api` container, port 3000 | ADR-0002 |
 | Database | PostgreSQL 16 container, volume-mounted, internal only | ADR-0003 |
-| Object storage | MinIO container (S3-compatible), private buckets, signed URLs | ADR-0009 |
+| Object storage | SeaweedFS container (S3-compatible), private buckets, signed URLs | ADR-0016 |
 | Firewall | UFW: 22, 80, 443 | - |
 | Swap | 2 GB file (protects against OOM during deploys and traffic spikes) | - |
 
@@ -102,7 +102,7 @@ Every service runs in Docker Compose with:
 - **Restart policy** - `restart: unless-stopped` on all services
 - **Resource limits** - memory/CPU caps so one runaway container cannot starve the others
 - **Internal network** - application services on a private bridge network; only nginx reaches the published ports
-- **Volumes** - named volumes for PostgreSQL data and MinIO data; `.env` mounted read-only
+- **Volumes** - named volumes for PostgreSQL data and SeaweedFS data; `.env` mounted read-only
 
 `Dockerfile`s for web and API and the compose files are created when Phase 1 implementation begins; they live in the parent repository alongside this documentation set (a future `infrastructure/` folder), following the pattern proven in the organisation's first deployment.
 
@@ -112,7 +112,7 @@ Every service runs in Docker Compose with:
 |------|--------|
 | Inbound from internet | 80/443 to nginx (Cloudflare origin), SSH (22) restricted by firewall/allowlist |
 | Origin pull | Cloudflare proxies to the VPS; origin certificate installed on nginx; "Always Use HTTPS" at the edge |
-| Internal | API-to-Postgres and API-to-MinIO traffic never leaves the Docker network |
+| Internal | API-to-Postgres and API-to-SeaweedFS traffic never leaves the Docker network |
 | Outbound | API reaches payment gateway, WhatsApp Business API, and email provider over HTTPS only |
 
 # CI/CD Pipeline
@@ -175,7 +175,7 @@ Known single-VPS limits are accepted in ADR-0014: planned maintenance counts aga
 Executed by scheduled jobs on the VPS, shipped off-site the same day:
 
 - Nightly `pg_dump` + WAL archiving for PostgreSQL
-- MinIO data volume export (uploads and CMS media)
+- SeaweedFS data volume export (uploads and CMS media)
 - Encrypted, then pushed to the offsite S3-compatible bucket on a **separate provider/account**
 - Weekly automated restore verification, quarterly DR drill
 
@@ -185,7 +185,7 @@ Full scope, retention, and procedures: `database/backup-and-recovery.md`.
 
 - UFW allows only 22/80/443; SSH key-only, password auth disabled, fail2ban for brute force
 - Unattended security updates for the OS; container images rebuilt on a regular cadence
-- PostgreSQL and MinIO never published to the internet
+- PostgreSQL and SeaweedFS never published to the internet
 - Root access avoided in day-to-day operations; application user in the `docker` group
 - Weekly dependency audit in CI (per `engineering-guidelines.md`)
 

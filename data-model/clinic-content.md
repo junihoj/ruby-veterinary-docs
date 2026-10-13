@@ -121,7 +121,7 @@ Public projection of staff members. Authentication identity lives in `identity.u
 | credentials | text[] | no | Qualifications list |
 | accreditations | text[] | yes | Registry memberships |
 | bio_md | text | yes | Short professional bio |
-| photo_object_key | text | yes | MinIO key; served via signed/CDN URL |
+| photo_object_key | text | yes | SeaweedFS key; served via signed/CDN URL |
 | specialisms | text[] | yes | Display tags |
 | published | boolean | no | |
 | sort_order | integer | no | |
@@ -201,7 +201,7 @@ Public projection of staff members. Authentication identity lives in `identity.u
 | title | text | no | e.g. `Post-operative care sheet` |
 | slug | text | no | Unique |
 | description | text | yes | |
-| object_key | text | no | MinIO key (ADR-0009) |
+| object_key | text | no | SeaweedFS key (ADR-0016) |
 | mime_type | text | no | `application/pdf` |
 | byte_size | integer | no | |
 | published | boolean | no | |
