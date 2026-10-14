@@ -28,6 +28,7 @@ The Operations context owns:
 
 - Dashboard view preferences per staff user
 - The platform-wide audit log (privileged actions beyond context-local trails)
+- Idempotent replay keys for money-moving endpoints and inbound webhook dedupe
 - Operational counters/snapshots if later required for dashboard performance
 
 It does **not** own business objects. Orders, prescriptions, articles, and products are never duplicated here. Prescription-specific audit rows live in the Pharmacy schema; this log records cross-cutting administrative actions.
@@ -40,6 +41,7 @@ It does **not** own business objects. Orders, prescriptions, articles, and produ
 |-----------|------|-------|
 | Audit | `audit_log` | Append-only |
 | Dashboard | `dashboard_preferences` | Per-user UI state |
+| Idempotency | `idempotency_keys` | Replay + dedupe store |
 
 ---
 
@@ -86,6 +88,35 @@ It does **not** own business objects. Orders, prescriptions, articles, and produ
 - Insert-only; retention per clinic policy in `../database/backup-and-recovery.md`
 - `before_json`/`after_json` never contain passwords, tokens, or card data
 - Every write through a privileged admin endpoint emits exactly one row
+
+## idempotency_keys
+
+Replay store behind the `Idempotency-Key` contract (`../api-specification.md`
+§Idempotency) and the inbound webhook dedupe requirement. One row per
+(scope, key) pair within the replay window.
+
+| Attribute | Type | Null | Notes |
+|-----------|------|------|-------|
+| id | uuid | no | PK |
+| scope | text | no | Operation scope, e.g. `checkout:<user uuid>`, `webhook:payments` |
+| key | text | no | Client `Idempotency-Key` header or provider event id |
+| user_id | uuid | yes | Cross-schema ref by id → `identity.users.id`; null for inbound webhooks |
+| request_hash | text | no | SHA-256 of the raw request body |
+| response_status | integer | no | HTTP status of the original success |
+| response_body | jsonb | yes | Original success body replayed verbatim; null for webhook acks |
+| created_at | timestamptz | no | |
+
+**Indexes**
+
+- `uq_idempotency_scope_key` unique on `(scope, key)`
+- `ix_idempotency_created` on `(created_at)`
+
+**Invariants**
+
+- Keys replay within 24 hours of `created_at`; older rows are treated as absent and re-created
+- Replay requires `request_hash` to match; a conflicting body under the same key returns `409 IDEMPOTENCY_CONFLICT`
+- Webhook scopes acknowledge duplicate event ids without re-running side effects
+- Rows never contain card data, tokens, or credentials
 
 ## dashboard_snapshots (deferred)
 

@@ -85,7 +85,7 @@ Tokens: short-lived access token plus rotating refresh token (ADR-0011). Public 
 | HTTP | `code` Examples | Meaning |
 |------|-----------------|---------|
 | `400` | `VALIDATION_FAILED` | Input failed schema or field validation; `details` lists fields |
-| `401` | `TOKEN_EXPIRED`, `INVALID_CREDENTIALS` | Missing or invalid authentication |
+| `401` | `TOKEN_EXPIRED`, `INVALID_CREDENTIALS`, `INVALID_SIGNATURE` | Missing or invalid authentication |
 | `403` | `STAFF_ONLY`, `PRESCRIBER_REQUIRED` | Authenticated but not permitted for this action |
 | `404` | `RESOURCE_NOT_FOUND` | Absent or hidden from this caller |
 | `409` | `IDEMPOTENCY_CONFLICT`, `STOCK_CHANGED`, `EMAIL_TAKEN` | State conflict; safe to re-read and retry |
@@ -171,7 +171,7 @@ Cache policy: public reads (clinic content, later catalog/articles) answer `Cach
 | `POST`/`PATCH`/`DELETE` | `/api/v1/subscriptions` | Bearer | Auto-refill management (physical simple/variable products only) |
 | `POST` | `/api/v1/admin/products` etc. | Staff (`catalog:write`) | Catalog maintenance across all seven product types |
 
-Checkout accepts an `Idempotency-Key`; stock is reserved per variant or composite component (`STOCK_CHANGED` on conflict). `fulfilmentMethod` is `ship`, `pickup`, or `digital` (digital when every line is virtual/downloadable).
+Checkout accepts an `Idempotency-Key`; stock is reserved per variant or composite component (`STOCK_CHANGED` on conflict). `fulfilmentMethod` is `ship`, `pickup`, or `digital` (digital when every line is virtual/downloadable). Quote totals are deterministic: `taxTotal` is 20% of `subtotal`, `shippingTotal` is a flat £4.99 for `ship` and `0` for `pickup`/`digital`, and `grandTotal = subtotal + taxTotal + shippingTotal`. Prescription-only lines are rejected at add-to-cart (`422 PRESCRIPTION_PENDING`) until the prescription flow releases them.
 
 ## Pharmacy Authorisation API
 
@@ -207,6 +207,8 @@ Processing contract:
 | `POST` | `/api/v1/webhooks/payments` | Signature | Capture confirmations, failures, refunds |
 
 Idempotent by provider event id; maps to `PaymentCaptured` / `PaymentFailed`. Rejections alert Operations.
+
+Signature: the `X-Provider-Signature` header carries the hex HMAC-SHA256 of the raw request body under the shared provider secret; verification happens before parsing, and a mismatch answers `401 INVALID_SIGNATURE`.
 
 ## Notifications & Operations API
 
