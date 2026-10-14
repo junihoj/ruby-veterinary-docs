@@ -215,7 +215,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Conflict:
-      description: IDEMPOTENCY_CONFLICT
+      description: EMAIL_TAKEN
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

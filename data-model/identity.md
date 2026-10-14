@@ -122,6 +122,8 @@ Refresh-token rotation state (ADR-0011). Access tokens are stateless JWTs; this 
 | user_agent | text | yes | Last seen |
 | expires_at | timestamptz | no | Hard expiry |
 | revoked_at | timestamptz | yes | Logout, compromise, or rotation replacement |
+
+Rotation and reuse: every refresh inserts a new session and atomically revokes the previous row. Presenting a revoked or already-rotated refresh token is treated as compromise — all of that user's sessions are revoked and the request fails `401 INVALID_CREDENTIALS`.
 | created_at | timestamptz | no | |
 
 **Indexes**

@@ -88,7 +88,7 @@ Tokens: short-lived access token plus rotating refresh token (ADR-0011). Public 
 | `401` | `TOKEN_EXPIRED`, `INVALID_CREDENTIALS` | Missing or invalid authentication |
 | `403` | `STAFF_ONLY`, `PRESCRIBER_REQUIRED` | Authenticated but not permitted for this action |
 | `404` | `RESOURCE_NOT_FOUND` | Absent or hidden from this caller |
-| `409` | `IDEMPOTENCY_CONFLICT`, `STOCK_CHANGED` | State conflict; safe to re-read and retry |
+| `409` | `IDEMPOTENCY_CONFLICT`, `STOCK_CHANGED`, `EMAIL_TAKEN` | State conflict; safe to re-read and retry |
 | `413` | `UPLOAD_TOO_LARGE` | Upload exceeds size limits |
 | `422` | `PRESCRIPTION_PENDING` | Business rule blocks completion (Rx hold) |
 | `429` | `RATE_LIMITED` | Throttled; `Retry-After` header set |
@@ -110,6 +110,15 @@ Error `code` values are stable API surface: clients branch on `code`, never on `
 | `POST` | `/api/v1/auth/refresh` | Refresh token | Rotate tokens |
 | `POST` | `/api/v1/auth/logout` | Bearer | Revoke refresh token |
 | `GET` | `/api/v1/auth/me` | Bearer | Current identity and roles |
+
+Auth failure semantics (stable `code` surface):
+
+- `401 TOKEN_EXPIRED` — access token past its TTL, or refresh session past `expires_at`.
+- `401 INVALID_CREDENTIALS` — wrong password, unknown email, revoked or reused refresh token.
+- `409 EMAIL_TAKEN` — register with an email that already has an account.
+- Refresh-token reuse (a revoked/rotated token presented again) is treated as compromise: **all of that user's sessions are revoked** and the request fails `401 INVALID_CREDENTIALS`.
+
+Cache policy: public reads (clinic content, later catalog/articles) answer `Cache-Control: public, max-age=60`; all auth responses answer `Cache-Control: no-store`.
 
 ## Clinic Content API
 
