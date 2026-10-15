@@ -107,9 +107,16 @@ paths:
           application/json:
             schema:
               type: object
-              required: [variantId, quantity]
+              required: [quantity]
               properties:
-                variantId: { type: string, example: var_01H... }
+                variantId:
+                  type: string
+                  nullable: true
+                  example: var_01H...
+                  description: >-
+                    Required for simple/variable and fixed-priced composite lines;
+                    omit for sum-priced composite lines (the product is then
+                    identified through components[].slotId).
                 quantity: { type: integer, minimum: 1 }
                 petId:
                   type: string
@@ -369,6 +376,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
@@ -398,6 +407,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
