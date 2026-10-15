@@ -242,6 +242,7 @@ It does **not** own prescription decisions (Pharmacy emits events back), pet rec
 **Invariants**
 
 - A grant exists only for a paid order line containing a downloadable product
+- Grants are issued on payment capture, one per paid line (unique `(order_item_id, product_id)` makes re-issued captures no-ops)
 - `downloads_used` never exceeds `max_downloads` when set
 - Revoked grants stop serving immediately
 
@@ -473,6 +474,7 @@ It does **not** own prescription decisions (Pharmacy emits events back), pet rec
 
 - Only physical `simple` / `variable` products may be subscribed (never virtual, downloadable, external, grouped, or composite)
 - Rx subscriptions require an approved prescription state before each auto-order; otherwise they pause and notify
+- An in-process timer picks due `active` rows, auto-orders through the idempotent checkout path, captures via the shared capture path, and advances `next_order_at`; a due row that cannot reserve stock is paused, not ordered
 - Cancellation stops future orders; existing orders are unaffected
 
 ---

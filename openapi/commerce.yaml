@@ -485,6 +485,43 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /admin/products/{id}/download-files:
+    post:
+      tags: [Catalog]
+      summary: Issue a presigned upload URL for a downloadable file (staff catalog:write)
+      operationId: adminCreateDownloadFile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: prd_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fileName, fileSizeBytes, mimeType]
+              properties:
+                fileName: { type: string }
+                fileSizeBytes: { type: integer, minimum: 1 }
+                mimeType: { type: string }
+      responses:
+        '201':
+          description: File record created; data carries the DownloadFile and a short-lived presigned PUT uploadUrl
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -618,7 +655,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Forbidden:
-      description: STAFF_ONLY (catalog:write required)
+      description: STAFF_ONLY (catalog:write required) or DOWNLOAD_NOT_AVAILABLE (grant revoked, expired, or exhausted)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

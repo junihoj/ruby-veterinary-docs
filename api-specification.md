@@ -86,7 +86,7 @@ Tokens: short-lived access token plus rotating refresh token (ADR-0011). Public 
 |------|-----------------|---------|
 | `400` | `VALIDATION_FAILED` | Input failed schema or field validation; `details` lists fields |
 | `401` | `TOKEN_EXPIRED`, `INVALID_CREDENTIALS`, `INVALID_SIGNATURE` | Missing or invalid authentication |
-| `403` | `STAFF_ONLY`, `PRESCRIBER_REQUIRED` | Authenticated but not permitted for this action |
+| `403` | `STAFF_ONLY`, `PRESCRIBER_REQUIRED`, `DOWNLOAD_NOT_AVAILABLE` | Authenticated but not permitted for this action |
 | `404` | `RESOURCE_NOT_FOUND` | Absent or hidden from this caller |
 | `409` | `IDEMPOTENCY_CONFLICT`, `STOCK_CHANGED`, `EMAIL_TAKEN` | State conflict; safe to re-read and retry |
 | `413` | `UPLOAD_TOO_LARGE` | Upload exceeds size limits |
@@ -170,8 +170,15 @@ Cache policy: public reads (clinic content, later catalog/articles) answer `Cach
 | `POST` | `/api/v1/downloads/:grantId/url` | Bearer | Issue a short-lived signed URL for one granted file (ADR-0009) |
 | `POST`/`PATCH`/`DELETE` | `/api/v1/subscriptions` | Bearer | Auto-refill management (physical simple/variable products only) |
 | `POST` | `/api/v1/admin/products` etc. | Staff (`catalog:write`) | Catalog maintenance across all seven product types |
+| `POST` | `/api/v1/admin/products/:id/download-files` | Staff (`catalog:write`) | Create a downloadable file record and receive a presigned PUT upload URL |
 
 Checkout accepts an `Idempotency-Key`; stock is reserved per variant or composite component (`STOCK_CHANGED` on conflict). `fulfilmentMethod` is `ship`, `pickup`, or `digital` (digital when every line is virtual/downloadable). Quote totals are deterministic: `taxTotal` is 20% of `subtotal`, `shippingTotal` is a flat £4.99 for `ship` and `0` for `pickup`/`digital`, and `grandTotal = subtotal + taxTotal + shippingTotal`. Prescription-only lines are rejected at add-to-cart (`422 PRESCRIPTION_PENDING`) until the prescription flow releases them.
+
+Composite lines carry a `components` selection validated against the product's slots (unknown slot/option or a per-slot count outside `minSelect`/`maxSelect` fails `400`); prices are re-read at quote — `fixed` from the parent's default variant, `sum` as the total of selected options with `price_override` substituting the candidate price. Derived flags apply to composite lines: prescription if any selected option product requires one (`422` at add), digital eligibility only when every selected component is virtual/downloadable.
+
+On payment capture the order is paid, component/variant stock settles, a `product_download_grants` row is issued for each paid line whose product is downloadable (idempotent per line), and a fulfilment whose lines are all virtual/downloadable completes immediately. `GET /orders/:id/downloads` lists the grants; `POST /downloads/:grantId/url` answers `404` for unknown or foreign grants and `403 DOWNLOAD_NOT_AVAILABLE` when the grant is revoked, expired, or exhausted.
+
+Subscriptions are physical `simple`/`variable` only (anything else `422`); an in-process timer picks `active` rows whose `next_order_at` is due, places a system order through the same idempotent checkout path (`Idempotency-Key` = `sub:<id>:<due-date>`), auto-captures it via the shared capture path, and advances `next_order_at`; a subscription that cannot reserve stock is paused instead of ordered.
 
 ## Pharmacy Authorisation API
 
