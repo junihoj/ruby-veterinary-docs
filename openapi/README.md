@@ -27,7 +27,8 @@ Machine-readable OpenAPI 3.1 definitions for the ruby-veterinary REST API, mirro
 | `components.yaml` | Shared | Envelope, errors, pagination, security schemes, common parameters |
 | `auth.yaml` | Auth | Register, login, refresh, logout, current identity |
 | `clinic-content.yaml` | Clinic Content | Hours, contact, services, staff, documents |
-| `intake.yaml` | Care Coordination | Appointment requests, client intake, signed uploads |
+| `intake.yaml` | Care Coordination | Appointment requests, client intake, signed uploads, staff triage & upload review |
+| `client-records.yaml` | Client & Patient Records | Staff CRUD for clients, pets, medical history, primary vets; owner pet list |
 | `publishing.yaml` | Publishing | Articles, taxonomy, newsletter subscribe |
 | `commerce.yaml` | Commerce | Products, cart, checkout, orders, subscriptions |
 | `pharmacy.yaml` | Pharmacy Authorisation | Review queue and decision endpoints |

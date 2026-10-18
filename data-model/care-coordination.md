@@ -82,7 +82,7 @@ It does **not** own client or pet records (those are written after acceptance in
 
 | Attribute | Type | Null | Notes |
 |-----------|------|------|-------|
-| id | uuid | no | PK; serialised `intake_…` |
+| id | uuid | no | PK; serialised `int_…` |
 | user_id | uuid | yes | Cross-schema ref by id → `identity.users.id` |
 | contact_name | text | no | |
 | contact_phone | text | no | E.164 |

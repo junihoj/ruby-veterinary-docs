@@ -1,0 +1,651 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Client & Patient Records API
+  description: |
+    Staff CRUD for clients, pets, medical history, and primary veterinarian
+    links, plus the owner-facing pet list used for commerce pet prefill
+    (pet claim). Acceptance of an intake filing rows through this context is
+    specified in `intake.yaml` (`POST /admin/clients/intake/{id}/accept`).
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+  - url: http://localhost:3000/api/v1
+tags:
+  - name: Client Records
+paths:
+  /pets:
+    get:
+      tags: [Client Records]
+      summary: List the caller's pets
+      operationId: listMyPets
+      description: |
+        Pets of the client record linked to the signed-in user (an empty list
+        when no client record exists yet — the owner reaches the clinic through
+        the intake form first). This is the pet-claim surface commerce reads
+        from; pet ownership is enforced here, not at checkout.
+      responses:
+        '200':
+          description: The caller's pets (empty when unlinked)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PetSummary' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /admin/clients:
+    get:
+      tags: [Client Records]
+      summary: Staff list of client records
+      operationId: listClients
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, inactive] }
+        - name: q
+          in: query
+          description: Case-insensitive search over display name and phone
+          schema: { type: string }
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+      responses:
+        '200':
+          description: Client page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Client' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Client Records]
+      summary: Create a client record
+      operationId: createClient
+      description: |
+        `source` records how the file entered the clinic. Linking an existing
+        identity account via `userId` is one active client per user; a second
+        active link answers `409 ALREADY_LINKED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientCreate' }
+      responses:
+        '201':
+          description: Created client
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Client' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/AlreadyLinked'
+  /admin/clients/{id}:
+    get:
+      tags: [Client Records]
+      summary: Client record with pets
+      operationId: getClient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: cli_01H... }
+      responses:
+        '200':
+          description: Client and pets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/Client'
+                      - type: object
+                        properties:
+                          pets:
+                            type: array
+                            items: { $ref: '#/components/schemas/Pet' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Client Records]
+      summary: Update a client record
+      operationId: updateClient
+      description: Partial demographics update; `status` toggles active/inactive. Soft-deleted rows are never returned.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: cli_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClientUpdate' }
+      responses:
+        '200':
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Client' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/clients/{id}/pets:
+    get:
+      tags: [Client Records]
+      summary: List a client's pets
+      operationId: listClientPets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: cli_01H... }
+      responses:
+        '200':
+          description: Pets (deceased included; deleted excluded)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Pet' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Client Records]
+      summary: Add a pet to a client
+      operationId: createPet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: cli_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PetCreate' }
+      responses:
+        '201':
+          description: Created pet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Pet' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/pets/{id}:
+    get:
+      tags: [Client Records]
+      summary: Pet record
+      operationId: getPet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: pet_01H... }
+      responses:
+        '200':
+          description: Pet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Pet' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Client Records]
+      summary: Update a pet record
+      operationId: updatePet
+      description: |
+        Partial demographics update; `status` toggles active/deceased —
+        deceased pets stay queryable for history but cannot be attached to new
+        prescription claims without staff override.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: pet_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PetUpdate' }
+      responses:
+        '200':
+          description: Updated pet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Pet' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/pets/{id}/medical-history:
+    get:
+      tags: [Client Records]
+      summary: Pet medical history records
+      operationId: listMedicalHistory
+      description: Reference objects only — bytes live in SeaweedFS (ADR-0016), newest first.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: pet_01H... }
+      responses:
+        '200':
+          description: History records
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/MedicalHistoryRecord' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Client Records]
+      summary: File a staff-uploaded medical history record
+      operationId: createMedicalHistoryRecord
+      description: |
+        Creates the record and returns a presigned PUT so the staff client
+        uploads the bytes directly to SeaweedFS — the API never sees file
+        bytes (ADR-0016), mirroring the downloadable-file upload flow.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: pet_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, fileName, mimeType, byteSize]
+              properties:
+                title: { type: string }
+                fileName: { type: string }
+                mimeType: { type: string, enum: [application/pdf, image/jpeg] }
+                byteSize: { type: integer, maximum: 10485760 }
+                visitDate: { type: string, format: date }
+                summary: { type: string, description: Staff clinical summary — never shown to owners }
+      responses:
+        '201':
+          description: Record created; upload the bytes to objectKey via uploadUrl
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/MedicalHistoryRecord'
+                      - type: object
+                        required: [objectKey, uploadUrl, uploadExpiresIn]
+                        properties:
+                          objectKey: { type: string }
+                          uploadUrl: { type: string, format: uri }
+                          uploadExpiresIn: { type: integer, description: Seconds }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+  /admin/pets/{id}/primary-vet:
+    get:
+      tags: [Client Records]
+      summary: Primary veterinarian history for a pet
+      operationId: listPrimaryVeterinarians
+      description: 'Current link first (effectiveTo null), then superseded links.'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: pet_01H... }
+      responses:
+        '200':
+          description: Links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PrimaryVeterinarianLink' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Client Records]
+      summary: Set the pet's current primary veterinarian
+      operationId: setPrimaryVeterinarian
+      description: |
+        Starts a new current link and closes the previous one in the same
+        transaction, preserving the one-current-per-pet partial unique index
+        the pharmacy guardrail (M5) depends on. The target user must hold the
+        `veterinarian` role (`422 NOT_A_VETERINARIAN` otherwise).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: pet_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [veterinarianUserId]
+              properties:
+                veterinarianUserId: { type: string, example: usr_01H... }
+                effectiveFrom: { type: string, format: date, description: Defaults to today }
+      responses:
+        '200':
+          description: New current link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/PrimaryVeterinarianLink' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+  schemas:
+    Meta:
+      type: object
+      required: [requestId, timestamp]
+      properties:
+        requestId: { type: string }
+        timestamp: { type: string, format: date-time }
+    Client:
+      type: object
+      required: [id, displayName, phone, preferredContact, source, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, example: cli_01H... }
+        userId:
+          type: string
+          nullable: true
+          description: Linked identity account; null for phone-only clients
+        displayName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, description: E.164 }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        preferredContact: { type: string, enum: [phone, email, whatsapp] }
+        source: { type: string, enum: [intake, walk_in, existing_import] }
+        status: { type: string, enum: [active, inactive] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ClientCreate:
+      type: object
+      required: [displayName, phone, source]
+      properties:
+        userId: { type: string, description: Identity account to link (one active client per user) }
+        displayName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, description: E.164 }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        preferredContact: { type: string, enum: [phone, email, whatsapp] }
+        source: { type: string, enum: [intake, walk_in, existing_import] }
+    ClientUpdate:
+      type: object
+      properties:
+        displayName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, description: E.164 }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        preferredContact: { type: string, enum: [phone, email, whatsapp] }
+        status: { type: string, enum: [active, inactive] }
+    Pet:
+      type: object
+      required: [id, clientId, name, species, status, createdAt, updatedAt]
+      properties:
+        id: { type: string, example: pet_01H... }
+        clientId: { type: string, example: cli_01H... }
+        name: { type: string }
+        species: { type: string, enum: [dog, cat, bird, rabbit, other] }
+        breed: { type: string }
+        sex: { type: string, enum: [female, male, unknown] }
+        neutered: { type: boolean }
+        dateOfBirth: { type: string, format: date }
+        weightKg: { type: number }
+        microchipId: { type: string }
+        notes: { type: string, description: Owner-visible only; clinical summaries live on history records }
+        status: { type: string, enum: [active, deceased, deleted] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PetSummary:
+      type: object
+      required: [id, name, species]
+      properties:
+        id: { type: string, example: pet_01H... }
+        name: { type: string }
+        species: { type: string, enum: [dog, cat, bird, rabbit, other] }
+        breed: { type: string }
+        status: { type: string, enum: [active, deceased, deleted] }
+    PetCreate:
+      type: object
+      required: [name, species]
+      properties:
+        name: { type: string }
+        species: { type: string, enum: [dog, cat, bird, rabbit, other] }
+        breed: { type: string }
+        sex: { type: string, enum: [female, male, unknown] }
+        neutered: { type: boolean }
+        dateOfBirth: { type: string, format: date }
+        weightKg: { type: number }
+        microchipId: { type: string }
+        notes: { type: string }
+    PetUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        species: { type: string, enum: [dog, cat, bird, rabbit, other] }
+        breed: { type: string }
+        sex: { type: string, enum: [female, male, unknown] }
+        neutered: { type: boolean }
+        dateOfBirth: { type: string, format: date }
+        weightKg: { type: number }
+        microchipId: { type: string }
+        notes: { type: string }
+        status: { type: string, enum: [active, deceased] }
+    MedicalHistoryRecord:
+      type: object
+      required: [id, petId, title, mimeType, byteSize, source, createdAt]
+      properties:
+        id: { type: string, example: mhr_01H... }
+        petId: { type: string, example: pet_01H... }
+        title: { type: string }
+        mimeType: { type: string, enum: [application/pdf, image/jpeg] }
+        byteSize: { type: integer }
+        source: { type: string, enum: [owner_upload, staff_upload, import] }
+        uploadedByUserId: { type: string, nullable: true }
+        visitDate: { type: string, format: date }
+        summary: { type: string, description: Staff clinical summary — never shown to owners }
+        createdAt: { type: string, format: date-time }
+    PrimaryVeterinarianLink:
+      type: object
+      required: [veterinarianUserId, effectiveFrom]
+      properties:
+        veterinarianUserId: { type: string, example: usr_01H... }
+        veterinarianName: { type: string }
+        effectiveFrom: { type: string, format: date }
+        effectiveTo:
+          type: string
+          format: date
+          nullable: true
+          description: 'null = current primary veterinarian'
+    ErrorBody:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              issue: { type: string }
+        requestId: { type: string }
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { $ref: '#/components/schemas/ErrorBody' }
+  responses:
+    BadRequest:
+      description: VALIDATION_FAILED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: TOKEN_EXPIRED
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: STAFF_ONLY
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: RESOURCE_NOT_FOUND
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AlreadyLinked:
+      description: ALREADY_LINKED (user already has an active client)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooLarge:
+      description: UPLOAD_TOO_LARGE
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unprocessable:
+      description: NOT_A_VETERINARIAN (business-rule block)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

@@ -68,6 +68,11 @@ paths:
         Returns a short-lived signed URL and object key. Client uploads directly
         to object storage (SeaweedFS); no file bytes pass through the API (ADR-0016).
         Accepted types: application/pdf, image/jpeg. Size cap: 10 MB.
+
+        `purpose: medical_history` records a pending `upl_…` upload whose id the
+        owner references from `historyUploadIds`; staff later finalise or reject
+        it. `purpose: cms_media` presigns without recording an upload (reserved
+        for publishing media; `uploadId` is null).
       requestBody:
         required: true
         content:
@@ -117,7 +122,7 @@ paths:
         - name: id
           in: path
           required: true
-          schema: { type: string, example: intake_01H... }
+          schema: { type: string, example: int_01H... }
       responses:
         '200':
           description: Status
@@ -128,6 +133,332 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+  /admin/appointment-requests:
+    get:
+      tags: [Intake]
+      summary: Staff queue of appointment requests
+      operationId: listAppointmentRequests
+      parameters:
+        - name: status
+          in: query
+          description: Filter by lifecycle status; omit for the whole queue
+          schema: { type: string, enum: [received, triaged, scheduled, declined, cancelled] }
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+      responses:
+        '200':
+          description: Queue page, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AppointmentRequest' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/appointment-requests/{id}:
+    patch:
+      tags: [Intake]
+      summary: Triage an appointment request
+      operationId: triageAppointmentRequest
+      description: |
+        Status lifecycle: `received → triaged → scheduled | declined`; `cancelled`
+        is reachable from any non-terminal state. `urgency` never overrides
+        triage. An invalid transition answers `409 STATE_CONFLICT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: apt_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [triaged, scheduled, declined, cancelled] }
+      responses:
+        '200':
+          description: Updated request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/AppointmentRequest' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+  /admin/clients/intake:
+    get:
+      tags: [Intake]
+      summary: Staff queue of new-client intake submissions
+      operationId: listIntakeSubmissions
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [received, in_review, accepted, rejected] }
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+      responses:
+        '200':
+          description: Queue page, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/IntakeSubmission' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/clients/intake/{id}:
+    patch:
+      tags: [Intake]
+      summary: Move an intake submission into review or reject it
+      operationId: updateIntakeSubmission
+      description: |
+        Status lifecycle: `received → in_review → accepted | rejected`
+        (`in_review` is also reachable directly from `received`). Acceptance
+        happens only through `POST /admin/clients/intake/{id}/accept` so client
+        and pet rows are always written by the Clients context module.
+        An invalid transition answers `409 STATE_CONFLICT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: int_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [in_review, rejected] }
+      responses:
+        '200':
+          description: Updated submission
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/IntakeSubmission' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+  /admin/clients/intake/{id}/accept:
+    post:
+      tags: [Intake]
+      summary: Accept an intake — files the client and their pets
+      operationId: acceptIntakeSubmission
+      description: |
+        Flow 2 of the domain event flows: acceptance writes the `Client` and
+        `Pet` rows through the Client & Patient Records context module, never
+        by direct cross-schema write. When the submission was made signed-in,
+        the created client is linked to that user, making its pets reachable
+        from commerce (pet claim). Submissions flagged `existingClient` must
+        reference an existing client via `clientId` instead of creating one;
+        missing `clientId` (or an already accepted/rejected submission)
+        answers `422 INTAKE_NOT_ACCEPTABLE`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: int_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pets]
+              properties:
+                clientId:
+                  type: string
+                  description: Existing client to attach the pets to (required when the submission set `existingClient`)
+                  example: cli_01H...
+                pets:
+                  type: array
+                  minItems: 1
+                  items: { $ref: '#/components/schemas/PetDraft' }
+      responses:
+        '201':
+          description: Accepted; client and pets filed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [status, clientId, pets]
+                    properties:
+                      status: { type: string, example: accepted }
+                      clientId: { type: string, example: cli_01H... }
+                      pets:
+                        type: array
+                        items: { $ref: '#/components/schemas/PetSummary' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /admin/uploads:
+    get:
+      tags: [Intake]
+      summary: Staff list of history uploads awaiting review
+      operationId: listHistoryUploads
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [pending, finalised, rejected] }
+        - name: appointmentRequestId
+          in: query
+          schema: { type: string, example: apt_01H... }
+        - name: intakeSubmissionId
+          in: query
+          schema: { type: string, example: int_01H... }
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/CursorParam'
+      responses:
+        '200':
+          description: Upload page, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/HistoryUpload' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /admin/uploads/{id}/url:
+    get:
+      tags: [Intake]
+      summary: Issue a signed download URL for a history upload
+      operationId: getHistoryUploadUrl
+      description: Files are private in SeaweedFS; staff reach them only through short-lived signed URLs (ADR-0016).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: upl_01H... }
+      responses:
+        '200':
+          description: Signed download details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    required: [url, expiresIn]
+                    properties:
+                      url: { type: string, format: uri }
+                      expiresIn: { type: integer, description: Seconds }
+                      fileName: { type: string }
+                      mimeType: { type: string }
+                      byteSize: { type: integer }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /admin/uploads/{id}:
+    patch:
+      tags: [Intake]
+      summary: Finalise or reject a history upload
+      operationId: updateHistoryUpload
+      description: |
+        Finalising verifies the object actually exists in SeaweedFS (the API
+        never sees the owner's PUT complete) and answers `422 UPLOAD_MISSING`
+        when it does not. Rejections require a reason; a rejected upload never
+        finalises into a parent record. Revisiting a terminal upload answers
+        `409 STATE_CONFLICT`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, example: upl_01H... }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [finalised, rejected] }
+                rejectionReason:
+                  type: string
+                  description: Required when status is rejected (type/size/scan failure)
+      responses:
+        '200':
+          description: Updated upload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/HistoryUpload' }
+                  meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/StateConflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -137,6 +468,16 @@ components:
       in: header
       required: false
       schema: { type: string, maxLength: 128 }
+    LimitParam:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    CursorParam:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
   schemas:
     Meta:
       type: object
@@ -181,6 +522,87 @@ components:
         historyUploadIds:
           type: array
           items: { type: string }
+    AppointmentRequest:
+      type: object
+      required: [id, status, urgency, contactName, contactPhone, contactEmail, petName, reason, createdAt, updatedAt]
+      properties:
+        id: { type: string, example: apt_01H... }
+        userId:
+          type: string
+          nullable: true
+          description: Null for anonymous requests
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string, format: email }
+        petName: { type: string }
+        petSpecies: { type: string, enum: [dog, cat, other] }
+        reason: { type: string }
+        preferredWindowStart: { type: string, format: date-time }
+        preferredWindowEnd: { type: string, format: date-time }
+        urgency: { type: string, enum: [routine, soon, urgent] }
+        status: { type: string, enum: [received, triaged, scheduled, declined, cancelled] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    IntakeSubmission:
+      type: object
+      required: [id, status, contactName, contactPhone, contactEmail, existingClient, createdAt, updatedAt]
+      properties:
+        id: { type: string, example: int_01H... }
+        userId: { type: string, nullable: true }
+        contactName: { type: string }
+        contactPhone: { type: string }
+        contactEmail: { type: string, format: email }
+        addressLine1: { type: string }
+        addressLine2: { type: string }
+        city: { type: string }
+        postalCode: { type: string }
+        country: { type: string }
+        existingClient: { type: boolean }
+        preferredVetUserId: { type: string, nullable: true }
+        notes: { type: string }
+        status: { type: string, enum: [received, in_review, accepted, rejected] }
+        uploadIds:
+          type: array
+          description: Pending history uploads linked at submission time
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    HistoryUpload:
+      type: object
+      required: [id, mimeType, byteSize, status, createdAt]
+      properties:
+        id: { type: string, example: upl_01H... }
+        appointmentRequestId: { type: string, nullable: true }
+        intakeSubmissionId: { type: string, nullable: true }
+        fileName: { type: string }
+        mimeType: { type: string, enum: [application/pdf, image/jpeg] }
+        byteSize: { type: integer }
+        uploadedByUserId: { type: string, nullable: true }
+        status: { type: string, enum: [pending, finalised, rejected] }
+        rejectionReason: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    PetDraft:
+      type: object
+      required: [name, species]
+      properties:
+        name: { type: string }
+        species: { type: string, enum: [dog, cat, bird, rabbit, other] }
+        breed: { type: string }
+        sex: { type: string, enum: [female, male, unknown] }
+        neutered: { type: boolean }
+        dateOfBirth: { type: string, format: date }
+        weightKg: { type: number }
+        microchipId: { type: string }
+        notes: { type: string }
+    PetSummary:
+      type: object
+      required: [id, name, species]
+      properties:
+        id: { type: string, example: pet_01H... }
+        name: { type: string }
+        species: { type: string, enum: [dog, cat, bird, rabbit, other] }
+        breed: { type: string }
+        status: { type: string, enum: [active, deceased, deleted] }
     ErrorBody:
       type: object
       required: [code, message, requestId]
@@ -211,8 +633,18 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: STAFF_ONLY
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
     Conflict:
       description: IDEMPOTENCY_CONFLICT
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    StateConflict:
+      description: STATE_CONFLICT (invalid status transition or terminal row)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -223,6 +655,11 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     TooLarge:
       description: UPLOAD_TOO_LARGE
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unprocessable:
+      description: INTAKE_NOT_ACCEPTABLE or UPLOAD_MISSING (business-rule block)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

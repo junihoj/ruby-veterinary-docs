@@ -138,10 +138,34 @@ Cache policy: public reads (clinic content, later catalog/articles) answer `Cach
 |--------|------|------|---------|
 | `POST` | `/api/v1/appointment-requests` | Optional | Submit intake form; email routing fires |
 | `POST` | `/api/v1/clients/intake` | Public or Bearer | New-client registration with history files |
-| `POST` | `/api/v1/uploads/sign` | Bearer | Issue signed upload URL for PDF/JPEG history |
+| `POST` | `/api/v1/uploads/sign` | Bearer | Issue signed upload URL for PDF/JPEG history (`medical_history` records an `upl_…` row; `cms_media` presigns only, reserved for M7) |
 | `GET` | `/api/v1/clients/intake/:id/status` | Bearer | Submission status |
+| `GET` | `/api/v1/admin/appointment-requests` | Staff (`care:write`) | Triage queue, status filter |
+| `PATCH` | `/api/v1/admin/appointment-requests/:id` | Staff (`care:write`) | Triage: `received → triaged → scheduled \| declined` (`409 STATE_CONFLICT` on invalid transitions) |
+| `GET` | `/api/v1/admin/clients/intake` | Staff (`care:write`) | Intake queue |
+| `PATCH` | `/api/v1/admin/clients/intake/:id` | Staff (`care:write`) | Move to `in_review` or `rejected` |
+| `POST` | `/api/v1/admin/clients/intake/:id/accept` | Staff (`care:write`) | File the Client + Pets through the Clients context module (Flow 2); `422 INTAKE_NOT_ACCEPTABLE` when `existingClient` lacks `clientId` |
+| `GET` | `/api/v1/admin/uploads` | Staff (`care:write`) | Upload review queue |
+| `GET` | `/api/v1/admin/uploads/:id/url` | Staff (`care:write`) | Signed download URL (ADR-0016) |
+| `PATCH` | `/api/v1/admin/uploads/:id` | Staff (`care:write`) | Finalise (object must exist — `422 UPLOAD_MISSING`) or reject with reason |
 
 `POST` bodies are idempotency-safe: retries with an `Idempotency-Key` header return the original result.
+
+Form submissions route through `EmailPort` (console adapter until an SMTP provider is chosen, ADR-0013): each request records dashboard + email alert rows and attempts delivery — an alert failure never fails the owner's submission. Submission publishes `AppointmentRequested` / `IntakeSubmitted`; acceptance publishes `IntakeComplete`; upload finalisation publishes `HistoryUploadReceived`.
+
+## Client & Patient Records API
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/api/v1/pets` | Bearer | The caller's pets (pet-claim surface for commerce prefill; empty list until an intake is accepted) |
+| `GET`/`POST` | `/api/v1/admin/clients` | Staff (`care:write`) | Client list (`q` over name/phone) and create (`409 ALREADY_LINKED` on a second active user link) |
+| `GET`/`PATCH` | `/api/v1/admin/clients/:id` | Staff (`care:write`) | Client record (GET includes pets); soft-delete via status |
+| `GET`/`POST` | `/api/v1/admin/clients/:id/pets` | Staff (`care:write`) | List and add pets |
+| `GET`/`PATCH` | `/api/v1/admin/pets/:id` | Staff (`care:write`) | Pet record; `status: deceased` keeps history queryable |
+| `GET`/`POST` | `/api/v1/admin/pets/:id/medical-history` | Staff (`care:write`) | History records (reference objects, ADR-0016); POST creates the row and returns a presigned PUT |
+| `GET`/`POST` | `/api/v1/admin/pets/:id/primary-vet` | Staff (`care:write`) | Primary-vet link history; POST starts a new current link and closes the previous one in the same transaction (`422 NOT_A_VETERINARIAN` unless the target holds the veterinarian role) |
+
+The one-current-primary-vet-per-pet partial unique index is the pharmacy guardrail (M5) — link changes must preserve it. `care:write` is granted to every staff role; client identities are 403 `STAFF_ONLY` on all `/admin` routes.
 
 ## Publishing API
 
@@ -247,8 +271,8 @@ Every money-moving or record-creating POST (`checkout`, `checkout/quote` is read
 Uploads (medical history PDF/JPEG, CMS media) use signed direct-to-object-storage URLs:
 
 1. `POST /api/v1/uploads/sign` returns a short-lived signed URL and object key
-2. Client uploads directly to object storage (ADR-0009)
-3. API validates type and size, then links the object to the owning record
+2. Client uploads directly to object storage (ADR-0016)
+3. A `medical_history` sign records a pending upload row, linked to the submission at intake time and finalised (object existence verified) or rejected by staff
 
 No file bytes pass through the API process. Accepted types: `application/pdf`, `image/jpeg`; default size cap 10 MB.
 
