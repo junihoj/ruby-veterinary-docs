@@ -300,7 +300,7 @@ It does **not** own prescription decisions (Pharmacy emits events back), pet rec
 
 **Invariants**
 
-- Rx items (`requires_prescription`) must carry `pet_id` before checkout quote succeeds
+- Rx items (`requires_prescription`) must carry `pet_id` — enforced at add-to-cart (the pet must belong to the caller: `400 VALIDATION_FAILED` missing, `404` foreign); quote/checkout re-check as defence (`422 PRESCRIPTION_PENDING`)
 - Prices are re-read from `product_variants` at quote/checkout; cart stores no price snapshot
 - Composite lines carry their selection in `cart_item_components`; `variant_id` is the parent's default variant for `fixed` pricing and null for `sum` pricing
 - `external` products never enter a cart
@@ -354,7 +354,7 @@ It does **not** own prescription decisions (Pharmacy emits events back), pet rec
 
 **Invariants**
 
-- `awaiting_prescription` is set when any line `requires_prescription`; order cannot move to `paid` until Pharmacy events approve all Rx lines (or staff override per policy)
+- `awaiting_prescription` is set when any line `requires_prescription`; order cannot move to `paid` until Pharmacy events approve all Rx lines. Payment capture while `awaiting_prescription` records the capture (and settles stock) but leaves the order held. Approval releases to `paid` once captured; rejection cancels the order, releases reserved stock, and refunds a captured payment
 - Totals are recomputed server-side; client totals are advisory
 - An order whose lines are all virtual/downloadable uses `digital` fulfilment and skips physical fulfilment; download grants issue on payment capture
 

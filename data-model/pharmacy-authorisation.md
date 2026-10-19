@@ -26,7 +26,7 @@ Defines the tables behind the clinical guardrail inside checkout: prescription a
 
 The Pharmacy Authorisation context owns:
 
-- Prescription requests raised by checkout or staff
+- Prescription requests raised by the checkout pharmacy hold (one per order + pet + Rx line set)
 - Patient association (pet + primary veterinarian context at decision time)
 - Decision rows: approve / reject / query with reasons
 - Append-only decision audit trail

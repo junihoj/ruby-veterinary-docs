@@ -83,16 +83,19 @@ Fulfilment completes
 ```
 Owner checks out Rx-containing order
   → Commerce creates Order (awaiting_prescription)
-  → publishes OrderPlaced + PrescriptionRequested (one per Rx order line set)
-  → Pharmacy stores PrescriptionRequest (pending)
+  → Commerce places the hold synchronously via the Pharmacy facade
+  → Pharmacy stores PrescriptionRequest rows (pending; one per order + pet + Rx line set)
+  → Pharmacy publishes PrescriptionRequested after the rows commit
   → owner sees PRESCRIPTION_PENDING on order status (never a blank error)
 Veterinarian reviews queue
-  → approve → PrescriptionApproved + rx_audit_log row
-  → reject → PrescriptionRejected + reason
+  → approve → PrescriptionApproved + prescription_decisions + rx_audit_log rows (one tx)
+  → reject → PrescriptionRejected + reason + audit rows
   → query → PrescriptionQueried (owner/staff loop)
 On approval
-  → Commerce listens, moves order → paid (after payment) / fulfilling
-  → stock released for fulfilment
+  → Commerce listens: if payment is already captured, order → paid / fulfilling
+  → payment captured while held: capture + stock settle recorded, order stays awaiting_prescription until approval
+On rejection
+  → Commerce listens: order → cancelled, reserved stock released, captured payment refunded
   → Notifications informs owner of Rx decision
 ```
 

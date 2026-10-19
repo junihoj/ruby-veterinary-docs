@@ -28,7 +28,7 @@ Specifies exactly which context owns each data domain, event, API surface, datab
 | Care Coordination | appointment_requests, intake_submissions, history_uploads, form_submission_alerts | patient records, orders |
 | Client & Patient Records | clients, pets, medical_history_records, primary_veterinarian_links | identity credentials, commerce state |
 | Commerce | products, variants, composite slots, grouped members, download files, carts, orders, payments, subscriptions | prescription decisions, pet records |
-| Pharmacy Authorisation | prescription_requests, prescription_decisions, rx_audit_log | order state (emits events) |
+| Pharmacy Authorisation | prescription_requests, prescription_decisions, rx_audit_log, patient_associations | order state (emits events) |
 | Care Messaging | conversations, inbox_messages, bot_rules, menu_flows, handover_sessions | appointment records (emits events) |
 | Notifications | notifications, delivery_channels, delivery_attempts, alert_subscriptions | business objects it reports on |
 | Operations | dashboard_preferences, audit_log | everything else (reads through interfaces) |
@@ -45,7 +45,7 @@ Specifies exactly which context owns each data domain, event, API surface, datab
 | OrderPlaced | Commerce | Notifications, Pharmacy (if Rx lines) |
 | PaymentCaptured / PaymentFailed | Commerce (via payments webhook) | Notifications, Operations |
 | OrderFulfilled | Commerce | Notifications |
-| PrescriptionRequested | Commerce / Pharmacy intake | Pharmacy (queue), Notifications |
+| PrescriptionRequested | Pharmacy Authorisation (via the synchronous hold Commerce places at checkout) | Pharmacy (queue), Notifications |
 | PrescriptionApproved / Rejected / Queried | Pharmacy Authorisation | Commerce, Notifications |
 | EmergencyDetected | Care Messaging | Notifications (critical), Operations |
 | HandoverRequested / HandoverAccepted | Care Messaging | Notifications, Care Coordination |

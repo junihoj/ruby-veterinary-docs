@@ -59,10 +59,12 @@ Events are the only sanctioned mechanism for one domain to inform another. A dom
 
 | Event | Payload Essentials | Raised When |
 |-------|--------------------|-------------|
-| `PrescriptionRequested` | request id, order id, pet, prescriber, items | Order containing Rx items reached review |
+| `PrescriptionRequested` | request id, order id, pet, prescriber, items | Checkout placed the pharmacy hold (published by Pharmacy after the request rows commit) |
 | `PrescriptionApproved` | request id, veterinarian id, decision note | Veterinarian authorised |
 | `PrescriptionRejected` | request id, veterinarian id, reason | Veterinarian declined |
 | `PrescriptionQueried` | request id, question | Veterinarian requested more information |
+
+All four events are published by Pharmacy Authorisation (post-commit, never inside the decision transaction); wire names follow `<context>.<aggregate>.<past tense>` — `pharmacy.prescription.requested|approved|rejected|queried`. Commerce consumes `PrescriptionApproved` (release to `paid` once payment is captured) and `PrescriptionRejected` (cancel order, release stock, refund if captured); Notifications consumers arrive with the async path.
 
 ## Care Messaging
 

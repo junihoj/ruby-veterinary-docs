@@ -32,7 +32,19 @@ paths:
           description: Queue
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/CollectionResponse' }
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/PrescriptionQueueItem' }
+                  meta:
+                    allOf:
+                      - $ref: '#/components/schemas/Meta'
+                      - type: object
+                        properties:
+                          pagination: { $ref: '#/components/schemas/PaginationMeta' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -51,10 +63,15 @@ paths:
           schema: { type: string, example: rx_01H... }
       responses:
         '200':
-          description: Prescription request
+          description: Prescription request with decisions and patient context
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/PrescriptionRequestDetail' }
+                  meta: { $ref: '#/components/schemas/Meta' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -87,7 +104,12 @@ paths:
           description: Approved
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/PrescriptionRequest' }
+                  meta: { $ref: '#/components/schemas/Meta' }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -124,7 +146,12 @@ paths:
           description: Rejected
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/PrescriptionRequest' }
+                  meta: { $ref: '#/components/schemas/Meta' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -163,7 +190,12 @@ paths:
           description: Queried
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ApiResponse' }
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data: { $ref: '#/components/schemas/PrescriptionRequest' }
+                  meta: { $ref: '#/components/schemas/Meta' }
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -206,23 +238,69 @@ components:
         limit: { type: integer }
         cursor: { type: string, nullable: true }
         hasMore: { type: boolean }
-    ApiResponse:
+    PrescriptionRequest:
       type: object
-      required: [data, meta]
+      required:
+        [id, orderId, orderItemIds, userId, petId, veterinarianUserId, status, requestedAt, createdAt]
       properties:
-        data: {}
-        meta: { $ref: '#/components/schemas/Meta' }
-    CollectionResponse:
+        id: { type: string, example: rx_01H... }
+        orderId: { type: string, example: ord_01H... }
+        orderItemIds:
+          type: array
+          items: { type: string, example: ori_01H... }
+        userId: { type: string, example: usr_01H... }
+        petId: { type: string, example: pet_01H... }
+        veterinarianUserId:
+          type: string
+          example: usr_01H...
+          description: Primary vet of the pet at request time (denormalised; the link row stays authoritative)
+        status:
+          type: string
+          enum: [pending, approved, rejected, queried]
+        ownerNote: { type: [string, null] }
+        requestedAt: { type: string, format: date-time }
+        decidedAt: { type: [string, null], format: date-time }
+        decidedBy: { type: [string, null], example: usr_01H... }
+        createdAt: { type: string, format: date-time }
+    PrescriptionDecision:
       type: object
-      required: [data, meta]
+      required: [id, prescriptionRequestId, decision, decidedBy, decidedAt]
+      description: Insert-only decision row (append-only, ADR-0012)
       properties:
-        data: { type: array, items: {} }
-        meta:
-          allOf:
-            - $ref: '#/components/schemas/Meta'
-            - type: object
+        id: { type: string, example: rxd_01H... }
+        prescriptionRequestId: { type: string }
+        decision: { type: string, enum: [approve, reject, query] }
+        reasonCode: { type: [string, null], example: wrong_dose }
+        reasonText: { type: [string, null] }
+        decidedBy: { type: string, example: usr_01H... }
+        decidedAt: { type: string, format: date-time }
+    PrescriptionQueueItem:
+      allOf:
+        - $ref: '#/components/schemas/PrescriptionRequest'
+        - type: object
+          properties:
+            petName: { type: string }
+            clientName: { type: string }
+    PrescriptionRequestDetail:
+      allOf:
+        - $ref: '#/components/schemas/PrescriptionRequest'
+        - type: object
+          required: [pet, decisions]
+          properties:
+            pet:
+              type: object
+              required: [id, name]
               properties:
-                pagination: { $ref: '#/components/schemas/PaginationMeta' }
+                id: { type: string, example: pet_01H... }
+                name: { type: string }
+            client:
+              type: object
+              properties:
+                id: { type: string, example: cli_01H... }
+                displayName: { type: string }
+            decisions:
+              type: array
+              items: { $ref: '#/components/schemas/PrescriptionDecision' }
     ErrorBody:
       type: object
       required: [code, message, requestId]
@@ -242,7 +320,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Forbidden:
-      description: PRESCRIBER_REQUIRED (rx:review role needed)
+      description: STAFF_ONLY (rx:review missing) or PRESCRIBER_REQUIRED (decisions are veterinarian-only)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -257,7 +335,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Conflict:
-      description: IDEMPOTENCY_CONFLICT (already decided)
+      description: STATE_CONFLICT (request already decided) or IDEMPOTENCY_CONFLICT (Idempotency-Key replay with a different body)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }

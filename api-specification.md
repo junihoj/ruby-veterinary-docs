@@ -88,9 +88,9 @@ Tokens: short-lived access token plus rotating refresh token (ADR-0011). Public 
 | `401` | `TOKEN_EXPIRED`, `INVALID_CREDENTIALS`, `INVALID_SIGNATURE` | Missing or invalid authentication |
 | `403` | `STAFF_ONLY`, `PRESCRIBER_REQUIRED`, `DOWNLOAD_NOT_AVAILABLE` | Authenticated but not permitted for this action |
 | `404` | `RESOURCE_NOT_FOUND` | Absent or hidden from this caller |
-| `409` | `IDEMPOTENCY_CONFLICT`, `STOCK_CHANGED`, `EMAIL_TAKEN` | State conflict; safe to re-read and retry |
+| `409` | `IDEMPOTENCY_CONFLICT`, `STATE_CONFLICT`, `STOCK_CHANGED`, `EMAIL_TAKEN` | State conflict; safe to re-read and retry |
 | `413` | `UPLOAD_TOO_LARGE` | Upload exceeds size limits |
-| `422` | `PRESCRIPTION_PENDING` | Business rule blocks completion (Rx hold) |
+| `422` | `PRESCRIPTION_PENDING`, `PRIMARY_VET_REQUIRED` | Business rule blocks completion (Rx hold; or an Rx line whose pet has no current primary-vet link) |
 | `429` | `RATE_LIMITED` | Throttled; `Retry-After` header set |
 | `500` | `INTERNAL_ERROR` | Unexpected; request id logged for correlation |
 | `503` | `DEPENDENCY_UNAVAILABLE` | External provider down; graceful fallback applies |
@@ -215,6 +215,13 @@ Subscriptions are physical `simple`/`variable` only (anything else `422`); an in
 | `POST` | `/api/v1/prescriptions/:id/query` | Staff (`rx:review`) | Request more information |
 
 Owner-facing status is read-only through `GET /orders/:id`. The decision endpoint is the only place an Rx order can be released, and it always writes the append-only audit trail (ADR-0012).
+
+Pharmacy rules:
+
+1. Requests are created by checkout — one per order + pet + Rx line set — never by a POST. Rx lines require a `petId` (owned by the caller) at add-to-cart (`400 VALIDATION_FAILED` missing, `404` foreign); checkout derives each pet's current primary vet server-side (`422 PRIMARY_VET_REQUIRED` when no current link exists).
+2. Queue and detail are readable by any `rx:review` holder; decisions additionally require the veterinarian role (`403 PRESCRIBER_REQUIRED` otherwise).
+3. Decisions are append-only (ADR-0012): `pending → approved | rejected | queried`, `queried → approved | rejected`; a decided request answers `409 STATE_CONFLICT`. Optional `Idempotency-Key` replays the original response; a different body under the same key answers `409 IDEMPOTENCY_CONFLICT`.
+4. Approval releases the order to `paid` once payment is captured (events, never a direct status write). Rejection cancels the order and releases reserved stock; a captured payment is refunded.
 
 ## Care Messaging Webhooks
 
