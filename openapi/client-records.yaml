@@ -586,8 +586,10 @@ components:
       type: object
       required: [veterinarianUserId, effectiveFrom]
       properties:
-        veterinarianUserId: { type: string, example: usr_01H... }
-        veterinarianName: { type: string }
+        veterinarianUserId:
+          type: string
+          example: usr_01H...
+          description: Identity account holding the veterinarian role (resolve display names via the identity surface)
         effectiveFrom: { type: string, format: date }
         effectiveTo:
           type: string

@@ -100,7 +100,7 @@ paths:
                   data:
                     type: object
                     properties:
-                      uploadId: { type: string, example: upl_01H... }
+                      uploadId: { type: [string, null], example: upl_01H... }
                       objectKey: { type: string }
                       uploadUrl: { type: string, format: uri }
                       method: { type: string, example: PUT }
@@ -109,6 +109,8 @@ paths:
                         additionalProperties: { type: string }
                       expiresAt: { type: string, format: date-time }
                   meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '413':
@@ -288,8 +290,8 @@ paths:
         the created client is linked to that user, making its pets reachable
         from commerce (pet claim). Submissions flagged `existingClient` must
         reference an existing client via `clientId` instead of creating one;
-        missing `clientId` (or an already accepted/rejected submission)
-        answers `422 INTAKE_NOT_ACCEPTABLE`.
+        a missing `clientId` answers `422 INTAKE_NOT_ACCEPTABLE`, while an
+        already accepted/rejected submission answers `409 STATE_CONFLICT`.
       parameters:
         - name: id
           in: path
