@@ -110,6 +110,8 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/PrescriptionRequest' }
                   meta: { $ref: '#/components/schemas/Meta' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

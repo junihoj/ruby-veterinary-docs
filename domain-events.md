@@ -64,7 +64,7 @@ Events are the only sanctioned mechanism for one domain to inform another. A dom
 | `PrescriptionRejected` | request id, veterinarian id, reason | Veterinarian declined |
 | `PrescriptionQueried` | request id, question | Veterinarian requested more information |
 
-All four events are published by Pharmacy Authorisation (post-commit, never inside the decision transaction); wire names follow `<context>.<aggregate>.<past tense>` — `pharmacy.prescription.requested|approved|rejected|queried`. Commerce consumes `PrescriptionApproved` (release to `paid` once payment is captured) and `PrescriptionRejected` (cancel order, release stock, refund if captured); Notifications consumers arrive with the async path.
+All four events are published by Pharmacy Authorisation (post-commit, never inside the decision transaction); `eventName` strings match the table exactly (PascalCase, as with every other integration event). Commerce consumes `PrescriptionApproved` (release to `paid` once payment is captured) and `PrescriptionRejected` (cancel order, release stock, refund if captured); Notifications consumers arrive with the async path.
 
 ## Care Messaging
 
