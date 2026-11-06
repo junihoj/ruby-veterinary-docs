@@ -70,11 +70,14 @@ All four events are published by Pharmacy Authorisation (post-commit, never insi
 
 | Event | Payload Essentials | Raised When |
 |-------|--------------------|-------------|
-| `ConversationStarted` | conversation id, channel, contact | First inbound WhatsApp message |
-| `EmergencyDetected` | conversation id, matched keyword, surfaced number | Panic keyword matched |
-| `HandoverRequested` | conversation id, trigger (user request or bot limit) | Bot paused, receptionist paged |
-| `HandoverAccepted` | conversation id, agent id | Receptionist claimed the conversation |
-| `OutOfHoursResponderActivated` | schedule id | Business hours profile flipped |
+| `ChatSessionStarted` | session id, conversation id, channel, client type | Anonymous chat session created (web cookie or mobile bearer) |
+| `ChatMessageReceived` | session id, seq, body, classification result | Visitor message processed (after classification, before AI/response) |
+| `EmergencyDetected` | conversation id, matched keyword, surfaced phone | Panic keyword matched; AI bypassed |
+| `PrivateDataDetected` | conversation id, intent pattern | Private-data intent classified; retrieval bypassed |
+| `HandoffRequested` | conversation id, trigger (user request or bot limit), provider | Bot paused; provider thread created |
+| `HandoffAccepted` | conversation id, provider, agent id | Staff claimed the conversation via provider |
+| `HandoffClosed` | conversation id, provider, reason | Staff closed the handoff |
+| `ChatSessionExpired` | session id, conversation id, type (ai_ttl or handoff_ttl) | Session TTL elapsed during sweeper sweep |
 
 ## Clinic Content, Publishing, Identity
 
@@ -106,7 +109,9 @@ All four events are published by Pharmacy Authorisation (post-commit, never insi
 | `PrescriptionRequested` | Pharmacy Authorisation | Notifications (veterinarian alert), Operations |
 | `PrescriptionApproved` / `PrescriptionRejected` | Pharmacy Authorisation | Commerce (release or release-hold), Notifications |
 | `EmergencyDetected` | Care Messaging | Notifications (high severity), Operations |
+| `PrivateDataDetected` | Care Messaging | Operations (shared inbox) |
 | `HandoverRequested` | Care Messaging | Operations (shared inbox), Notifications (receptionist page) |
+| `HandoverAccepted`, `HandoverClosed` | Care Messaging | Operations (shared inbox updates) |
 | `ArticlePublished` | Publishing | Clinic Content (render), Notifications (digest) |
 | `ClientRegistered` | Identity & Access | Care Coordination, Notifications |
 | `AlertRaised` | any domain | Notifications, Operations dashboard |

@@ -34,7 +34,7 @@ One NestJS process. Ten bounded contexts, each an internal Nest module with hard
 | DDD | Aggregates and value objects **only where invariants exist**; contexts without rich rules skip `domain/` entirely |
 | CQRS | `@nestjs/cqrs` command/query split; one database; queries are plain reads through repositories |
 | Facade | Every context exposes exactly one `*FacadePort` + `*Facade` — its public API for other modules |
-| Port & adapter | Outbound ports for external systems (payments, WhatsApp, email, object storage) and inbound facade ports wired through in-process adapters |
+| Port & adapter | Outbound ports for external systems (payments, messaging providers, email, object storage) and inbound facade ports wired through in-process adapters |
 | Integration events | Cross-context collaboration on an in-process bus; past-tense, idempotent consumers |
 
 **Deliberately not built:** event sourcing, projections, separate read stores, unit of work, outbox framework, microservices. These are absent in both the reference platform and our scale assumptions (single clinic, single VPS, hundreds of SKUs); Rule 7.4 requires an ADR before queues or replicas anyway.
@@ -235,7 +235,7 @@ Wiring: consumer module binds `{ provide: X_FACADE_PORT, useClass: XFacadeInProc
 | Port | Adapters | Notes |
 |------|----------|-------|
 | `PaymentGatewayPort` | stripe/paystack-class adapter + router | ADR-0007; no card data; idempotent webhooks |
-| `WhatsAppPort` | WhatsApp Business API adapter | ADR-0008; signature verification; 2s bot budget |
+| `MessagingProviderPort` | Telegram (first); WhatsApp (future) adapter | ADR-0017; forum topics, staff bridging, signature verification |
 | `EmailPort` | transactional provider adapter | ADR-0013; failures alert, never fail requests |
 | `ObjectStoragePort` | SeaweedFS S3 adapter | ADR-0016 (supersedes ADR-0009); signed direct uploads, no file bytes through API |
 | `IntegrationEventPublisher` | in-process adapter over `EventBus` | shared kernel port |
@@ -327,7 +327,8 @@ Linter violations of 1, 5, and 6 fail CI.
 | **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (SeaweedFS signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
 | **4 — Care path** | Care Coordination (appointment requests, intake, signed uploads) + Client & Patient Records (clients, pets) + `EmailPort` for form routing | Intake upload flow; pet claim reachable from commerce |
 | **5 — Pharmacy** | Pharmacy Authorisation (queue, decisions, audit, patient association); **lifts the 3a Rx block**; Rx orders release to `paid` | Rx guardrail e2e green; no path moves Rx orders to `paid` without Pharmacy events |
-| **6 — Async path** | Care Messaging (WhatsApp webhook, handover) + Notifications + Operations (admin inbox reads, alerts) | 2s bot budget measured; idempotent webhook dedupe tested |
+| **6a — Hybrid Messaging + AI** | Care Messaging (web chat widget, Socket.IO gateway, RAG AI bot, emergency/private-data classifiers, per-session seq, rate limits, daily spend caps), AI Assistant (`ai_kb` pgvector schema with least-privilege role, LLM + embedding ports (OpenAI first), admin document ingestion with PII scan + human approval, in-process embedding worker) | Widget streams live; safety classifiers prevent LLM calls for emergency/private-data; `seq` replay after reconnect; ingestion idempotent; OpenAPI diff clean |
+| **6b — Telegram Handoff** | Telegram provider adapter behind `MessagingProviderPort` (forum topics, staff bridging, /claim /close /note commands), webhook controller (`update_id` dedupe, `X-Telegram-Bot-Api-Secret-Token` validation), handoff session 24 h replay window | Telegram reply reaches web chat within 5 s; reconnect replays handoff messages; expired frame after 24 h |
 | **7 — Content path** | Publishing (articles, categories, newsletter) | Public blog reads + newsletter subscribe |
 
 Each phase ends with docs-as-contract discipline: behaviour change ⇒ spec update in the same PR (`engineering-guidelines.md`).

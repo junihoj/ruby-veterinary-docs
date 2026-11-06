@@ -33,7 +33,8 @@ Machine-readable OpenAPI 3.1 definitions for the ruby-veterinary REST API, mirro
 | `commerce.yaml` | Commerce | Products, cart, checkout, orders, subscriptions |
 | `pharmacy.yaml` | Pharmacy Authorisation | Review queue and decision endpoints |
 | `admin-operations.yaml` | Operations | Admin alerts, shared inbox |
-| `webhooks.yaml` | Webhooks | Inbound WhatsApp and payment webhooks |
+| `messaging.yaml` | Messaging | Chat sessions (web + mobile), admin AI documents, Telegram webhook |
+| `webhooks.yaml` | Webhooks | Inbound WhatsApp (future) and payment webhooks |
 
 Each domain file is self-contained (local `components`) so generators and reviewers can open one file in isolation. `components.yaml` is the canonical reference for shared shapes.
 

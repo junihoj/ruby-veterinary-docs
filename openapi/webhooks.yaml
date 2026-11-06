@@ -2,10 +2,13 @@ openapi: 3.1.0
 info:
   title: ruby-veterinary Webhooks
   description: |
-    Inbound third-party webhooks: WhatsApp Business API and payment gateway.
+    Inbound third-party webhooks: payment gateway callbacks.
     Auth is provider signature verification, not bearer tokens.
     Processing contract: verify signature → immediate 200 → dedupe by
     provider event id → async work. Rejections alert Operations.
+    
+    **Telegram webhook** is in `messaging.yaml` (a message-handling page path, not a passive callback).
+    **WhatsApp webhook** is deferred — the paths below are preserved as a future contract stub.
   version: 1.0.0
 servers:
   - url: https://api.ruby-veterinary.example.com/api/v1

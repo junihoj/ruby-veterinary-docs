@@ -113,7 +113,7 @@ Every service runs in Docker Compose with:
 | Inbound from internet | 80/443 to nginx (Cloudflare origin), SSH (22) restricted by firewall/allowlist |
 | Origin pull | Cloudflare proxies to the VPS; origin certificate installed on nginx; "Always Use HTTPS" at the edge |
 | Internal | API-to-Postgres and API-to-SeaweedFS traffic never leaves the Docker network |
-| Outbound | API reaches payment gateway, WhatsApp Business API, and email provider over HTTPS only |
+| Outbound | API reaches payment gateway, messaging providers (Telegram), and email provider over HTTPS only |
 
 # CI/CD Pipeline
 
@@ -134,7 +134,7 @@ The emergency path (static contact pages served from cache) must survive a deplo
 
 - `.env` lives on the VPS outside any repository; never committed, never printed in logs
 - CI holds only the SSH credential needed to deploy
-- Provider keys (payments, WhatsApp, email) are stored in the `.env` with least-privilege scopes
+- Provider keys (payments, Telegram, email) are stored in the `.env` with least-privilege scopes
 - Rotating a secret is a VPS file edit plus a container restart; rotation cadence is reviewed quarterly
 
 # SSL / TLS

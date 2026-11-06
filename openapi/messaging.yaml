@@ -1,0 +1,617 @@
+openapi: 3.1.0
+info:
+  title: ruby-veterinary Messaging API
+  description: |
+    Chat session creation, WebSocket endpoint reference, admin AI document
+    management, and Telegram webhook.  The real-time protocol is documented
+    in `messaging-protocol.md`, not in this file.
+  version: 1.0.0
+servers:
+  - url: https://api.ruby-veterinary.example.com/api/v1
+    description: Production (placeholder)
+  - url: http://localhost:3000/api/v1
+    description: Local development
+
+tags:
+  - name: Chat Sessions
+    description: Anonymous session creation for web and mobile chat
+  - name: Admin AI Documents
+    description: Knowledge-base document ingestion and lifecycle management
+  - name: Telegram Webhook
+    description: Inbound Telegram updates for staff handoff
+
+paths:
+
+  # ── Chat Sessions ──────────────────────────────────────────────────────
+
+  /chat/session:
+    post:
+      tags: [Chat Sessions]
+      summary: Create a web chat session
+      description: |
+        Creates an anonymous chat session for the web widget. Returns an
+        HttpOnly cookie (`rv_chat_session`) containing the opaque session
+        token.  The cookie is used automatically on subsequent WebSocket
+        handshakes.
+      operationId: createWebChatSession
+      security: []
+      responses:
+        '200':
+          description: Session created
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: rv_chat_session=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/api
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /chat/session/mobile:
+    post:
+      tags: [Chat Sessions]
+      summary: Create a mobile chat session
+      description: |
+        Creates an anonymous chat session for a mobile app client. Returns
+        a session ID, an opaque session token, a short-lived JWT access
+        token (30 min), and a refresh token for rotation. Mobile clients
+        use `auth.token` on the WebSocket handshake.
+      operationId: createMobileChatSession
+      security: []
+      responses:
+        '200':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileChatSessionResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /chat/token/refresh:
+    post:
+      tags: [Chat Sessions]
+      summary: Refresh a mobile access token
+      description: |
+        Exchanges a refresh token for a new short-lived access token. The
+        old refresh token is invalidated (rotation). Requires
+        `Authorization: Bearer <refreshToken>`.
+      operationId: refreshMobileToken
+      security: []
+      requestBody:
+        required: false
+      responses:
+        '200':
+          description: New access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /chat/messages:
+    get:
+      tags: [Chat Sessions]
+      summary: Replay messages (REST fallback)
+      description: |
+        Returns messages after a given sequence number. Intended as a
+        fallback for mobile clients that cannot maintain a persistent
+        WebSocket. The WebSocket replay path is preferred.
+      operationId: getChatMessages
+      parameters:
+        - name: after_seq
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 0
+          description: Return messages with seq strictly greater than this value
+      security:
+        - chatSession: []
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Messages returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessagesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ── Admin AI Documents ─────────────────────────────────────────────────
+
+  /admin/ai/documents:
+    get:
+      tags: [Admin AI Documents]
+      summary: List knowledge-base documents
+      operationId: listDocuments
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_review, active, archived]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [policy, services, hours, pricing, catalog, faq, other]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      security:
+        - bearerAuth: [ai:admin]
+      responses:
+        '200':
+          description: Paginated document list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Admin AI Documents]
+      summary: Ingest a knowledge-base document
+      description: |
+        Multipart upload: the `file` part carries the document (pdf, md,
+        txt, docx, html, csv); the `metadata` part is a JSON object with
+        `title`, `category`, and optional `effective_date`. The document
+        is parsed, chunked, PII-scanned, and queued for embedding. Status
+        is `pending_review` until a human calls `/approve`.
+      operationId: ingestDocument
+      security:
+        - bearerAuth: [ai:admin]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, metadata]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                metadata:
+                  type: string
+                  description: JSON string
+                  example: '{"title":"Clinic Hours 2026","category":"hours","effectiveDate":"2026-01-01"}'
+      responses:
+        '201':
+          description: Document created (pending_review)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          $ref: '#/components/responses/ValidationFailed'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Duplicate content hash detected; version bumped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+
+  /admin/ai/documents/{documentId}:
+    get:
+      tags: [Admin AI Documents]
+      summary: Get a single document
+      operationId: getDocument
+      parameters:
+        - $ref: '#/components/parameters/documentId'
+      security:
+        - bearerAuth: [ai:admin]
+      responses:
+        '200':
+          description: Document with findings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Admin AI Documents]
+      summary: Update document metadata
+      operationId: updateDocument
+      parameters:
+        - $ref: '#/components/parameters/documentId'
+      security:
+        - bearerAuth: [ai:admin]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                category:
+                  type: string
+                  enum: [policy, services, hours, pricing, catalog, faq, other]
+                effective_date:
+                  type: string
+                  format: date
+      responses:
+        '200':
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Admin AI Documents]
+      summary: Delete a document (cascade)
+      operationId: deleteDocument
+      parameters:
+        - $ref: '#/components/parameters/documentId'
+      security:
+        - bearerAuth: [ai:admin]
+      responses:
+        '204':
+          description: Document and all chunks/findings/jobs deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/ai/documents/{documentId}/approve:
+    post:
+      tags: [Admin AI Documents]
+      summary: Approve a pending document for retrieval
+      operationId: approveDocument
+      parameters:
+        - $ref: '#/components/parameters/documentId'
+      security:
+        - bearerAuth: [ai:admin]
+      responses:
+        '200':
+          description: Document status set to active; chunks become retrievable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Document is not in pending_review state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/ai/documents/{documentId}/reindex:
+    post:
+      tags: [Admin AI Documents]
+      summary: Re-chunk and re-embed a document
+      operationId: reindexDocument
+      parameters:
+        - $ref: '#/components/parameters/documentId'
+      security:
+        - bearerAuth: [ai:admin]
+      responses:
+        '202':
+          description: Reindex job queued; chunks replaced when complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /admin/ai/documents/{documentId}/archive:
+    post:
+      tags: [Admin AI Documents]
+      summary: Archive a document (exclude from retrieval)
+      operationId: archiveDocument
+      parameters:
+        - $ref: '#/components/parameters/documentId'
+      security:
+        - bearerAuth: [ai:admin]
+      responses:
+        '200':
+          description: Document archived; chunks excluded from retrieval
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ── Telegram Webhook ───────────────────────────────────────────────────
+
+  /webhooks/telegram:
+    post:
+      tags: [Telegram Webhook]
+      summary: Receive Telegram update
+      description: |
+        Inbound webhook from Telegram Bot API. Validates
+        `X-Telegram-Bot-Api-Secret-Token` header against
+        `TELEGRAM_WEBHOOK_SECRET`. Deduplicates by `update_id`. Creates
+        forum topics for handoff conversations; relays staff messages
+        to web chat via WebSocket.
+      operationId: telegramWebhook
+      security: []
+      parameters:
+        - name: X-Telegram-Bot-Api-Secret-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Telegram Update object (see Bot API docs)
+      responses:
+        '200':
+          description: Update acknowledged (processed asynchronously)
+        '401':
+          description: Invalid or missing secret token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+# ── Components ────────────────────────────────────────────────────────────
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    chatSession:
+      type: apiKey
+      in: cookie
+      name: rv_chat_session
+
+  parameters:
+    documentId:
+      name: documentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+
+    # ── Chat Sessions ──────────────────────────────────────────────────
+
+    ChatSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          format: int64
+          description: Current sequence number (0 for new sessions)
+        expiresAt:
+          type: string
+          format: date-time
+
+    MobileChatSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        sessionToken:
+          type: string
+          description: Opaque session token (stored client-side)
+        accessToken:
+          type: string
+          description: JWT, 30 min expiry, sub=sessionId
+        refreshToken:
+          type: string
+          description: Opaque, single-use, rotated on refresh
+        expiresIn:
+          type: integer
+          description: Access token TTL in seconds (1800)
+
+    TokenRefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+          description: New refresh token (rotation)
+        expiresIn:
+          type: integer
+
+    ChatMessagesResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+          format: int64
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        senderType:
+          type: string
+          enum: [visitor, bot, staff, system]
+        body:
+          type: string
+        frameType:
+          type: string
+          enum: [token, staff_message, handoff, system]
+        citations:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/Citation'
+        createdAt:
+          type: string
+          format: date-time
+
+    Citation:
+      type: object
+      properties:
+        title:
+          type: string
+        category:
+          type: string
+        effectiveDate:
+          type: string
+          format: date
+
+    # ── Admin AI Documents ─────────────────────────────────────────────
+
+    DocumentListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentResponse'
+        cursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+
+    DocumentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        category:
+          type: string
+          enum: [policy, services, hours, pricing, catalog, faq, other]
+        source:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending_review, active, archived]
+        effectiveDate:
+          type: string
+          format: date
+          nullable: true
+        version:
+          type: integer
+        findings:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngestionFinding'
+        chunkCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    IngestionFinding:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rule:
+          type: string
+          enum: [pii_email, pii_phone, pii_address, pii_patient_id, pii_lab_value]
+        excerpt:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high]
+
+    # ── Shared ─────────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: array
+              items: {}
+            requestId:
+              type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required or token expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Too many requests
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationFailed:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

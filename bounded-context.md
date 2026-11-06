@@ -60,10 +60,10 @@ It turns the domains in `domain-model.md` into deployable and ownership boundari
                              v
                  +------------------------+
                  | Care Messaging         |-----> Care Coordination (handover)
-                 | (WhatsApp bot, inbox)  |-----> Notifications (alerts)
+                 | (web chat, AI bot, handoff)|-----> Notifications (alerts)
                  +------------------------+
 
-   Notification delivery: outbound email / WhatsApp via third-party providers
+   Notification delivery: outbound email / Telegram via third-party providers
 ```
 
 ---
@@ -118,8 +118,8 @@ The deepest chain is Commerce -> Pharmacy Authorisation -> Client & Patient Reco
 |---------|------------------|-----|
 | **Direct module call (synchronous)** | Commerce -> Pharmacy Authorisation to place a hold; Operations -> anything for read models | Same process, strong consistency required |
 | **Domain events (asynchronous)** | Every entry in `domain-events.md` | Loose coupling, retry tolerance, no foreign-table reads |
-| **Webhook (external inbound)** | WhatsApp Business API and payment gateway callbacks | Third parties cannot call inside the process |
-| **Outbound adapter** | Notifications -> email/WhatsApp providers; Commerce -> payment gateway | External variability isolated behind an interface |
+| **Webhook (external inbound)** | Telegram Bot API and payment gateway callbacks | Third parties cannot call inside the process |
+| **Outbound adapter** | Notifications -> email/Telegram providers; Commerce -> payment gateway | External variability isolated behind an interface |
 
 ### Where Each Pattern Is Used
 
@@ -167,7 +167,7 @@ The deepest chain is Commerce -> Pharmacy Authorisation -> Client & Patient Reco
 | **High (clinical safety)** | Pharmacy Authorisation | Rx orders cannot be released; manual offline authorisation fallback engages |
 | **High (revenue)** | Commerce | Storefront purchasing unavailable; site, CMS, and booking unaffected |
 | **Medium** | Care Coordination | Appointment and intake forms degrade to a phone number fallback (never a dead end) |
-| **Medium** | Care Messaging | Bot unavailable; click-to-chat and phone fallback shown, WhatsApp direct still reachable |
+| **Medium** | Care Messaging | Bot unavailable; click-to-chat and phone fallback shown, Telegram handoff still reachable |
 | **Low** | Publishing | Existing articles stay served from cache; new publishing unavailable |
 | **Low** | Clinic Content | Cached static pages served; edits unavailable |
 | **Low** | Notifications | Alerts delayed; the dashboard still shows submissions |

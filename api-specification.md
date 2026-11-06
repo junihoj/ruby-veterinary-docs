@@ -47,7 +47,10 @@ It is the source of truth for resources, endpoints, payloads, authentication, an
 | Public reads (services, staff, hours, articles, catalog) | No authentication |
 | Client actions (intake, orders, subscriptions) | `Authorization: Bearer <access token>` with client role claim |
 | Staff back office, prescription decisions, catalog writes | Bearer token with additive staff role claims |
-| Inbound webhooks (WhatsApp, payments) | Provider signature verification, not bearer tokens |
+| Inbound webhooks (Telegram, payments) | Provider signature verification, not bearer tokens |
+| Chat sessions (web widget) | HttpOnly cookie (`rv_chat_session`), set by `POST /chat/session` |
+| Chat sessions (mobile) | `Authorization: Bearer <access token>` (30 min JWT), refreshable |
+| Chat WebSocket | Cookie (web) or `auth.token` (mobile); validated on connection |
 | Emergency surface | Must function with no session; never redirect to login |
 
 Tokens: short-lived access token plus rotating refresh token (ADR-0011). Public browsing never requires a session.
@@ -223,20 +226,99 @@ Pharmacy rules:
 3. Decisions are append-only (ADR-0012): `pending → approved | rejected | queried`, `queried → approved | rejected`; a decided request answers `409 STATE_CONFLICT`. Optional `Idempotency-Key` replays the original response; a different body under the same key answers `409 IDEMPOTENCY_CONFLICT`.
 4. Approval releases the order to `paid` once payment is captured (events, never a direct status write). Rejection cancels the order and releases reserved stock; a captured payment is refunded.
 
-## Care Messaging Webhooks
+## Care Messaging
+
+Chat sessions are anonymous (no user account required). The real-time
+protocol is defined in `messaging-protocol.md`; this section covers the
+REST endpoints and the WebSocket endpoint reference.
+
+### Chat Session Endpoints
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| `GET` | `/api/v1/webhooks/whatsapp/verify` | Signature | Meta webhook verification handshake |
-| `POST` | `/api/v1/webhooks/whatsapp` | Signature | Inbound messages, status callbacks |
+| `POST` | `/api/v1/chat/session` | Anonymous (`Origin` validated) | Web: sets `rv_chat_session` HttpOnly cookie |
+| `POST` | `/api/v1/chat/session/mobile` | Anonymous (`Origin` validated) | Mobile: returns `sessionToken` + `accessToken` + `refreshToken` |
+| `POST` | `/api/v1/chat/token/refresh` | `Authorization: Bearer <refreshToken>` | Rotates mobile access token (single-use, rotated) |
+| `GET` | `/api/v1/chat/messages?after_seq=` | Cookie or bearer | REST replay fallback for mobile |
+| `WS` | `/api/v1/chat/socket.io` (namespace `/chat`) | Cookie (web) or `auth.token` (mobile) | Socket.IO 4, `websocket` transport, frame protocol per `messaging-protocol.md` |
+
+Session contract:
+
+1. `POST /chat/session` sets a `Set-Cookie` header; the browser sends
+   the cookie automatically on the WebSocket upgrade. No JavaScript
+   access to the token.
+2. `POST /chat/session/mobile` returns a 30-minute JWT access token and
+   a single-use opaque refresh token. Mobile clients refresh before
+   expiry.
+3. One `ChatSessionGuard` resolves `ChatSessionContext` from either the
+   cookie or the bearer JWT.
+4. `Origin` header is validated on session creation and WebSocket
+   handshake; cross-origin requests are rejected (`403`).
+
+### WebSocket Protocol (reference)
+
+See `messaging-protocol.md` for the full spec. Summary:
+
+- Frame types: `token`, `citation`, `done`, `error`, `staff_message`, `handoff`, `expired`, `notice`.
+- Per-session monotonic `seq` allocated via `UPDATE ... RETURNING last_seq`.
+- Replay on reconnect with `last_seen_seq`; server emits missed messages.
+- Server-side classifiers run before any LLM call: emergency keywords
+  (`EmergencyDetected`) → fixed clinic phone response; private-data intent
+  (`PrivateDataDetected`) → handoff prompt + phone/contact/booking links.
+- Rate limits: per-IP token bucket, per-session token bucket, daily
+  request + token cap; `code: CAP_REACHED` blocks the session for the day.
+
+### Safety Classifiers
+
+| Priority | Trigger | LLM called? | Response |
+|----------|---------|-------------|----------|
+| 1 | Daily request / token cap hit | No | `error code:CAP_REACHED` |
+| 2 | Per-IP or per-session rate limit | No | `error code:RATE_LIMITED` |
+| 3 | Emergency keywords (poisoning, seizure, breathing, bloat, trauma, etc.) | No | Fixed safe response with clinic phone `+2348139640640` |
+| 4 | Private-data intent (my records/labs/appointment/prescription/refill) | No | Handoff prompt + phone + contact + booking links |
+| 5 | Weak retrieval (all scores < threshold) | Yes (retrieval only, no generation) | "I'm not sure, please contact the clinic." |
+| 6 | Normal | Yes (full) | Streamed tokens + citations + done |
+
+### Admin AI Document Endpoints
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `GET` | `/api/v1/admin/ai/documents` | Staff (`ai:admin`) | List documents, filter by status/category |
+| `POST` | `/api/v1/admin/ai/documents` | Staff (`ai:admin`) | Multipart ingest (file + metadata JSON) |
+| `GET` | `/api/v1/admin/ai/documents/:id` | Staff (`ai:admin`) | Single document with findings |
+| `PUT` | `/api/v1/admin/ai/documents/:id` | Staff (`ai:admin`) | Update title/category/effective_date |
+| `POST` | `/api/v1/admin/ai/documents/:id/approve` | Staff (`ai:admin`) | `pending_review` → `active` |
+| `POST` | `/api/v1/admin/ai/documents/:id/reindex` | Staff (`ai:admin`) | Re-chunk + re-embed |
+| `POST` | `/api/v1/admin/ai/documents/:id/archive` | Staff (`ai:admin`) | `active` → `archived` |
+| `DELETE` | `/api/v1/admin/ai/documents/:id` | Staff (`ai:admin`) | Cascade delete |
+
+Ingestion contract:
+
+1. Documents arrive `pending_review`; PII scan runs at parse time.
+2. A human must call `/approve` before chunks enter retrieval.
+3. Re-ingesting a document with the same content bumps the version and
+   replaces old chunks atomically (`content_hash` deduplication).
+4. Archive excludes chunks from retrieval; delete cascades to
+   chunks + findings + jobs.
+5. Embedding happens off the request path: a DB-backed `ingestion_jobs`
+   table + in-process `@nestjs/schedule` tick (matches Locked Decision #7).
+
+### Telegram Webhook
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| `POST` | `/api/v1/webhooks/telegram` | `X-Telegram-Bot-Api-Secret-Token` header | Inbound Telegram updates |
 
 Processing contract:
 
-1. Verify provider signature before parsing
-2. Acknowledge within provider timeout (immediate `200`), process asynchronously
-3. Deduplicate by provider message id (at-least-once delivery)
-4. Keyword rules fire within the 2s bot latency budget; panic keywords raise `EmergencyDetected` with highest priority
-5. `HandoverRequested` pages the shared inbox; bot stays paused until `HandoverAccepted`
+1. Validate `X-Telegram-Bot-Api-Secret-Token` before parsing (`401 INVALID_SECRET`).
+2. Deduplicate by `update_id` (at-least-once delivery).
+3. Handoff conversations create a forum topic in the staff group; the
+   `provider_threads` table maps the topic ID to the conversation.
+4. Staff messages in a topic are bridged to the web chat via WebSocket
+   (`staff_message` frame).
+5. `/claim`, `/close`, `/note` commands update the handover state.
+6. Forum topics are archived on handoff close.
 
 ## Payments Webhooks
 
@@ -266,6 +348,8 @@ Signature: the `X-Provider-Signature` header carries the hex HMAC-SHA256 of the 
 | Public reads | 120 req/min per IP | Cached upstream; `429` with `Retry-After` beyond |
 | Form and newsletter submits | 5 per 10 min per IP | Spam control |
 | Auth endpoints | 10 per 10 min per IP | Brute-force control |
+| Chat sessions (per IP) | 20 msg/min per IP | Inspects `X-Forwarded-For`; `429` with `Retry-After` |
+| Chat sessions (per session) | 10 msg/min per session | In-memory token bucket; `error code:RATE_LIMITED` on WebSocket |
 | Webhooks | Provider retry schedule | Deduplicated, never rate-limited into data loss |
 | Staff writes | Generous | Throttled only to protect shared inboxes |
 

@@ -60,7 +60,8 @@ Mirrors `api-architecture.md` §12 (amended by Milestone 0).
 | **3b — Money path (composite & digital)** | Composite cart lines (slots, fixed/sum pricing, component stock), downloadable purchases (SeaweedFS signed URLs, digital fulfilment, grants on payment capture), subscriptions | Composite + digital e2e green |
 | **4 — Care path** | Care Coordination (appointment requests, intake, signed uploads) + Client & Patient Records (clients, pets) + `EmailPort` console adapter for form routing | Intake upload flow; pet claim reachable from commerce |
 | **5 — Pharmacy** | Pharmacy Authorisation (queue, decisions, audit, patient association); **lifts the 3a Rx block**; Rx orders release to `paid` | Rx guardrail e2e green; no path moves Rx orders to `paid` without Pharmacy events |
-| **6 — Async path** | Care Messaging (WhatsApp webhook, handover) + Notifications + Operations (admin inbox, alerts) | 2s bot budget measured; idempotent webhook dedupe tested |
+| **6a — Hybrid Messaging + AI** | Care Messaging (web chat widget, Socket.IO gateway, RAG AI bot, emergency/private-data classifiers, rate limits, daily caps), AI Assistant (`ai_kb` pgvector schema, LLM + embedding ports, admin document ingestion with PII scan + human approval) | Widget streams live; safety classifiers prevent LLM calls on emergency/private-data; `seq` replay after reconnect; ingestion idempotent; OpenAPI diff clean |
+| **6b — Telegram Handoff** | Telegram provider adapter behind `MessagingProviderPort` (forum topics, staff bridging, commands), webhook controller (`update_id` dedupe, secret validation), handoff session 24 h window | Telegram reply reaches web chat within 5 s; reconnect replays handoff messages; expired frame after 24 h |
 | **7 — Content path** | Publishing (articles, categories, newsletter) | Public blog reads + newsletter subscribe |
 
 Sequencing facts that drive this order:
@@ -70,6 +71,9 @@ Sequencing facts that drive this order:
 - The interim Rx guardrail (422 at cart-add) is a temporary build guard, not
   specified behaviour; Phase 5 replaces it with the real prescription hold.
 - Pharmacy cannot start before Phase 4: patient association needs `clients.pets`.
+- **Notifications + Operations** (the old M6 remainder: email adapters, dashboard
+  reads, admin inbox, alerts) are deferred to a post-MVP milestone. Their schema
+  stubs and seed data remain untouched.
 
 ---
 
@@ -184,12 +188,32 @@ Prescription request lifecycle and queue, veterinarian-only decisions
 Lifts the M3a Rx block. Both named e2e critical paths fully green: Rx
 guardrail (rejection paths) and checkout idempotency.
 
-## M6 — Async path
+## M6a — Hybrid Messaging + AI Assistant (Phase 1)
 
-WhatsApp webhook (signature verification, message-id dedupe, keyword rules,
-2s bot budget measured), human handover inbox, notifications delivery
-(dashboard + email adapters), operations audit and dashboard reads.
-Webhooks exempt from rate limits but deduped.
+Replaces WhatsApp triage with a web chat widget (Next.js client component),
+a Socket.IO WebSocket gateway, and a RAG-powered AI bot (`ai-assistant`
+module behind `AiAssistantPort`; OpenAI adapters behind `LlmPort` /
+`EmbeddingPort`, pgvector retrieval in `ai_kb` schema with least-privilege
+DB role). Chat sessions: web (HttpOnly cookie) + mobile (bearer + refresh);
+per-session `seq` with reconnect replay. Server-side emergency and
+private-data classifiers block LLM calls for safety-critical messages;
+deterministic safe fallbacks display clinic phone (`+2348139640640`),
+contact form (`https://ruby-veterinary.com`), and booking link
+(`https://calendly.com/ezeonyekachukwu97/30min`). Admin document ingestion
+(API endpoint + CLI) with PII scan, human approval gate, and idempotent
+re-indexing. Rate limits per IP/session + daily spend/token caps. In-process
+ingestion worker (DB-backed job table, matches Locked Decision #7).
+
+## M6b — Telegram Handoff (Phase 2)
+
+Telegram forum topics as the staff handoff channel behind
+`MessagingProviderPort`: one topic per conversation, staff replies bridged
+to the web chat, `/claim` `/close` `/note` commands, `update_id` webhook
+dedupe. Handoff sessions retain 24 h replay window; expiry emits `expired`
+frame with clinic contact. Telegram webhook controller (`X-Telegram-Bot-Api-
+Secret-Token`), `MessagingProviderPort` extended with `createThread` +
+`bridgeMessage`. Both phases ship in MVP (M3a/M3b precedent: two commits,
+one milestone).
 
 ## M7 — Content path
 

@@ -372,6 +372,62 @@ The team outgrows single-process SeaweedFS (needs erasure coding, multi-site rep
 
 ---
 
+## ADR-0017 - Hybrid Messaging Channel + AI Assistant
+
+**Status:** Accepted
+
+## Context
+
+M6 originally specified WhatsApp triage only, with the WhatsApp Business API as the single messaging channel. Since then, the clinic's needs have expanded:
+
+1. The clinic wants a **web chat widget** embedded on their own Next.js site so anonymous website visitors can ask questions without leaving the page.
+2. A **RAG-powered AI bot** should answer common questions (hours, services, pricing, catalog items) from a curated knowledge base, reducing receptionist load for routine inquiries.
+3. The handoff layer must be **provider-swappable**: Telegram first (free, fast to set up), with WhatsApp remaining an optional future provider. The WhatsApp Business verification lead time (tracked in `prd.md` risks) should not block the handoff feature.
+4. **Mobile app** support is needed — the same backend must serve web and mobile clients through a unified session model.
+5. A single HTTPS channel must support anonymous web visitors, mobile app clients, and staff handoff through the same server-side session model.
+
+## Decision
+
+Replace the WhatsApp-only messaging design with a **hybrid system**:
+
+1. **Web chat widget** embedded in the Next.js frontend, connected via **Socket.IO WebSocket** to the NestJS API. The widget is a lightweight React component that establishes a persistent, authenticated WebSocket tunnel.
+2. **RAG AI bot** implemented as an `ai-assistant` module inside the API, using **pgvector** in a dedicated `ai_kb` schema with a least-privilege DB role (`ai_kb_app`). Embeddings use `text-embedding-3-small` (1536 dimensions). Retrieval is via cosine similarity (`<=>`) with a configurable k-nearest-neighbours limit.
+3. **Provider-swappable handoff adapter** via a `MessagingProviderPort` interface; **Telegram first**, with the adapter pattern keeping WhatsApp as a drop-in future provider. Forum topics are the Telegram model; one topic per handoff session.
+4. **Unified session model**: web clients use an **HttpOnly cookie** carrying an opaque session token; mobile clients use a **short-lived JWT bearer + refresh token**. One `ChatSessionGuard` consumes both authentication modes. Sessions carry a monotonically increasing sequence number for replay and ordering.
+5. **Server-side emergency and private-data classifiers** block LLM calls for safety-critical messages. `bot_rules` (already in the `messaging` schema) provides deterministic keyword-based panic detection. A second classifier scans messages for PII patterns (email, phone, patient IDs, lab values) and falls back to deterministic safe responses with clinic contact info. No message flagged as emergency or containing private data reaches the LLM.
+6. **Admin document ingestion endpoint + CLI** for uploading knowledge-base documents. Every ingested document passes through a PII scan and requires **human approval** before its chunks become retrievable (status transitions from `pending_review` to `active`).
+
+### Alternatives Considered
+
+| Option | Why Not |
+|--------|---------|
+| Stay WhatsApp-only | Blocks Telegram handoff and the web chat widget; WhatsApp verification lead time delays delivery |
+| Separate AI microservice | Operational cost and latency of a separate deploy; in-process embedding worker with a DB job table keeps the modular monolith (ADR-0002) intact |
+| Vector database (Pinecone, Weaviate class) | Another service to operate, pay for, and secure; pgvector is free, in-process, and the data volume (clinic knowledge base) is well within PostgreSQL's capabilities |
+| Let the LLM decide emergency classification | Non-deterministic; a missed emergency is a clinical safety failure |
+| Prisma for `ai_kb` schema | The `ai_kb` schema is intentionally outside the Prisma-managed set; a dedicated `pg.Pool` with the `ai_kb_app` role provides isolation and avoids accidental cross-schema access |
+
+## Rationale
+
+pgvector keeps the AI feature inside the same PostgreSQL instance — no new service, no new operational surface. The least-privilege `ai_kb_app` role prevents the AI module from ever touching clinical schemas, satisfying the data-safety requirements that make a veterinary system different from a generic chatbot. The provider-swappable adapter (Telegram → WhatsApp later) is the same port/adapter pattern already proven by the SeaweedFS decision (ADR-0016). Deterministic classifiers before the LLM call are the only defensible approach for a medical-adjacent system: the bot must never hallucinate an emergency response.
+
+## Consequences
+
+- **pgvector extension** replaces the `postgres:16-alpine` compose image with `pgvector/pgvector:pg16`; the extension is created via `CREATE EXTENSION vector;` in migrations.
+- **`ai_kb` schema** + **`ai_kb_app` restricted role** accessed via a dedicated `pg.Pool` (not Prisma). The role has USAGE on `ai_kb` only, SELECT/INSERT/UPDATE/DELETE on its tables, and zero access to clinical or other schemas.
+- **ADR-0008 is amended**: WhatsApp becomes an optional future provider rather than the mandatory messaging channel. The verified Business API remains the path if/when WhatsApp is added.
+- **New dependencies**: `@nestjs/websockets`, `socket.io`, `openai`, and ingestion parsers (PDF, text, markdown).
+- **In-process embedding worker**: a DB job table (`ai_kb.ingestion_jobs`) polled by a tick-based worker, matching ADR-0015 rule 7 (in-process workers with DB-backed job queues, no external broker).
+- **Notifications + Operations integration deferred** to post-MVP: AI chat transcripts and analytics dashboards are not in the initial scope.
+- The `care-messaging.md` data model is rewritten to reflect multi-channel sessions, chat sessions, provider threads, and daily usage caps.
+- A new `data-model/ai-assistant.md` documents the `ai_kb` schema, embedding pipeline, and ingestion workflow.
+
+## Revisit When
+
+The knowledge base outgrows pgvector's single-instance performance (vector index rebuild times exceed acceptable deployment windows, or retrieval latency breaches the bot response budget). Either condition warrants evaluating a dedicated vector store behind the same adapter pattern. Also revisit when WhatsApp Business verification completes — add the WhatsApp adapter implementing `MessagingProviderPort`.
+
+---
+
 # ADR Governance
 
 - New ADRs are proposed in a pull request touching only this file (and the README if the index changes)
