@@ -4,7 +4,7 @@
 >
 > **Document:** Telegram Handoff — Setup Runbook
 >
-> **Version:** 1.1.0
+> **Version:** 1.2.0
 >
 > **Status:** Living
 >
@@ -140,10 +140,13 @@ TELEGRAM_WEBHOOK_SECRET=<dev secret from A4>
 **Do not prefix any of these variables with `NEXT_PUBLIC_`.** These are
 server-side secrets and must never be exposed to the browser.
 
-> **Implementation status:** the API does not read `TELEGRAM_*` yet. The
-> variables are inert until the M6b Telegram handoff code lands. Do not expect
-> the API to register the webhook automatically before then — register it
-> manually per A8.
+> **Implementation status:** M6b is implemented. The API reads `TELEGRAM_*`,
+> creates forum topics on handoff, validates the webhook secret, and bridges
+> staff replies to the web chat. Webhook registration is manual (A8) because
+> the API does not assume a public URL at boot.
+
+`TELEGRAM_API_BASE_URL` is optional and reserved for automated tests, which
+point it at a local Bot API mock. Leave it unset in development and production.
 
 ## A6. Expose the local API with a named Cloudflare tunnel
 
@@ -338,18 +341,16 @@ TELEGRAM_WEBHOOK_SECRET=<the output from openssl rand -hex 32>
 
 Restart the API service after setting them.
 
-Once M6b is deployed, the API registers the webhook with Telegram on startup
-(POST `https://api.telegram.org/bot<TOKEN>/setWebhook` with
-`url=https://<your-domain>/api/v1/webhooks/telegram` and
-`secret_token=<TELEGRAM_WEBHOOK_SECRET>`). Before that, register it manually
-with the command in B6.
+The API does not register the webhook automatically (it does not assume a
+public URL at boot). Register it once with the command in B6 after the service
+is reachable.
 
 **Do not prefix any of these variables with `NEXT_PUBLIC_`.** These are
 server-side secrets and must never be exposed to the browser.
 
 ## B6. Register and verify the webhook
 
-If the API does not register the webhook automatically, run:
+Register the webhook after the API is reachable:
 
 ```bash
 curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
@@ -394,12 +395,12 @@ Send a test message to the bot (DM the bot, not the group):
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Webhook shows `last_error_message` | Wrong URL or HTTPS cert issue | Verify domain, check Nginx/Caddy passes `/api/v1/webhooks/telegram` through |
-| Webhook returns 404 / retries grow | Webhook controller not deployed yet (M6b) | Defer `setWebhook`, or run `deleteWebhook` until the endpoint exists |
-| No topics created on handoff | Bot not admin in group | Re-promote; ensure "Manage Topics" is enabled |
+| Webhook returns 404 / retries grow | Endpoint not deployed, or the reverse proxy does not pass `/api/v1/webhooks/telegram` | Deploy the API and check the Nginx/Caddy route |
+| No topics created on handoff | Bot not admin in group, or Telegram env trio is incomplete | Re-promote; ensure "Manage Topics" is enabled; verify all three `TELEGRAM_*` values |
 | `createForumTopic` returns 403 | Bot lacks Manage Topics | Re-check admin permissions in A3/B3 |
 | `getChat` shows `"is_forum": false` | Topics not enabled on the group | Group info → Edit → Group Type → enable Topics |
-| Bot doesn't respond to `/claim` | Webhook not receiving or update deduped | Check `getWebhookInfo` for pending updates; check API logs for `update_id` |
-| Secret token mismatch | `TELEGRAM_WEBHOOK_SECRET` differs between env and setWebhook call | Regenerate secret, set in env, restart API (re-registers webhook) |
+| Bot doesn't respond to `/claim` | Webhook not receiving, or update already deduped | Check `getWebhookInfo` for pending updates; check API logs for `update_id` |
+| Secret token mismatch | `TELEGRAM_WEBHOOK_SECRET` differs between env and setWebhook call | Regenerate secret, set it in env, restart the API, then re-run `setWebhook` |
 | Group ID wrong | Copied from group info instead of via `@getidsbot` | Use `@getidsbot`; ID must start with `-100` for supergroups |
 | Dev tunnel returns 502/1033 | Tunnel not running or `config.yml` ingress wrong | Start `cloudflared tunnel run ruby-vet-dev`; check the service port is 3000 |
 | Dev tunnel hostname unreachable | DNS route missing | Re-run `cloudflared tunnel route dns ruby-vet-dev dev-api.ruby-veterinary.com` |
@@ -424,10 +425,10 @@ openssl rand -hex 32
 # 4. Update env vars + restart API
 ```
 
-Once M6b is deployed, the API re-registers the webhook on startup with the new
-secret and old webhook URLs are overwritten. Before then, re-run `setWebhook`
-manually with the new secret. For development, also re-run `setWebhook`, or
-`deleteWebhook` when the tunnel is not in use.
+After restarting the API with the new secret, re-run `setWebhook` manually so
+Telegram starts sending the new `secret_token`. The API does not re-register on
+startup. For development, re-run `setWebhook`, or `deleteWebhook` when the
+tunnel is not in use.
 
 ---
 

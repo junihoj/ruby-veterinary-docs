@@ -4,7 +4,7 @@
 >
 > **Document:** Messaging Protocol — WebSocket + Auth
 >
-> **Version:** 1.0.0
+> **Version:** 1.1.0
 >
 > **Status:** Living Document
 >
@@ -88,7 +88,7 @@ anonymous POST /session ───► active (AI-only, 45 min TTL)
 | `expired` | — | Server emits `expired` frame with clinic contact info and disconnects |
 | `closed` | — | No replay possible; session is terminal |
 
-The `ChatSessionSweeper` runs every 5 minutes via `@Interval(5000 * 60)`: deletes stale AI-only chats (`status = 'active' AND expires_at < now()`), marks handoff as expired (`status = 'handoff' AND expires_at < now()`). Expired sessions cannot be reconnected.
+The `ChatSessionSweeper` runs every 5 minutes: expired AI-only and handoff sessions lose their transcript and are marked `expired`; open handovers resolve as `expired` and their provider topics close. Expired sessions cannot be reconnected.
 
 ---
 
@@ -210,6 +210,29 @@ sweeper terminates a session. After this frame, the server disconnects.
 ```
 
 Emitted once per session, immediately after connection, as `seq: 1`.
+
+---
+
+# Telegram Staff Commands
+
+Each handoff gets its own forum topic in the private clinic supergroup. The
+topic id is stored in `provider_threads.provider_thread_id`; the webhook maps
+inbound topic messages back to the conversation and active handoff session.
+
+| Input in the topic | Effect |
+|---|---|
+| Plain text | Persisted as `staff_message` and broadcast to the visitor's open socket; then acked with "Sent to the visitor." |
+| `/claim` | First claim wins. Sets the handover `claimed`, conversation `human_active`, emits `handoff:accepted` with the staff member's display name, and records the claimer in `provider_threads.metadata.claimed_by`. |
+| `/close [reason]` | Resolves the handover (`reason` defaults to `staff_closed`), closes the session and conversation, emits `handoff:closed`, and closes the forum topic. |
+| `/note <text>` | Internal note stored in `provider_threads.metadata.notes`; never sent to the visitor and never written to `inbox_messages`. |
+
+Unrecognized commands return the usage line. Messages without a topic id
+(DMs to the bot, the General topic) are ignored. Every update is deduplicated
+by `update_id` before any side effect, so Telegram retries are safe.
+
+If the visitor's session expired, staff replies are acked but not delivered;
+the topic receives "The visitor's chat has expired; this reply was not
+delivered."
 
 ---
 

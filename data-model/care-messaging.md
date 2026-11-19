@@ -4,7 +4,7 @@
 >
 > **Document:** Care Messaging Data Model
 >
-> **Version:** 2.0.0
+> **Version:** 2.1.0
 >
 > **Status:** Living Document
 >
@@ -145,7 +145,7 @@ Extended from the original WhatsApp-only model. Now includes session-scoped sequ
 
 - `seq` is per-session monotonic; allocated atomically with the session's `last_seq`.
 - Replay queries: `WHERE session_id = $1 AND seq > $last_seen_seq AND created_at > now() - interval $ttl`.
-- Expired session messages are deleted by the `ChatSessionSweeper` along with the session.
+- Expired session messages are deleted by the `ChatSessionSweeper`; the session row becomes `expired` so reconnect can receive the `expired` frame.
 - Provider retries dedupe on `dedupe_key`; duplicates never double-post.
 - Bot and staff messages share one stream so handover is chronological.
 
@@ -172,6 +172,30 @@ Maps a conversation to an external provider thread (e.g., Telegram forum topic).
 - One thread per conversation per provider.
 - Created on handoff request; the `MessagingProviderPort` adapter creates the actual provider resource and stores the thread id here.
 - `metadata` carries Telegram-specific state (chat_id, message_thread_id) so the adapter does not need to poll Telegram for context.
+
+## messaging.webhook_updates
+
+Durable dedupe log for at-least-once provider webhooks. Telegram retries an
+update until the API acknowledges it; the unique key prevents double-processing
+(topic creation, staff relay, command side effects).
+
+| Attribute | Type | Null | Notes |
+|-----------|------|------|-------|
+| id | uuid | no | PK |
+| provider | text | no | `telegram` \| `whatsapp` |
+| update_id | text | no | Provider update id stored as text (Telegram is bigint) |
+| received_at | timestamptz | no | DEFAULT `now()` |
+
+**Indexes**
+
+- `uq_webhook_updates_provider_update` unique on `(provider, update_id)`
+- `ix_webhook_updates_received` on `(received_at)`
+
+**Invariants**
+
+- Insert happens before any side effect; a duplicate key is a no-op `200`.
+- If processing throws, the row is removed so Telegram's retry can be processed.
+- Rows older than 7 days are pruned by the `ChatSessionSweeper`.
 
 ## messaging.chat_usage_daily
 
@@ -339,10 +363,10 @@ Repurposed from the original numbered-menu bot. Now used exclusively for determi
 ```
 
 - **Sweeper interval**: every 5 minutes (`ChatSessionSweeper` cron tick).
-- **AI-only sessions**: expire `CHAT_SESSION_TTL_MINUTES` after `last_activity_at` (default: 30 min).
-- **Handoff sessions**: expire `CHAT_HANDOFF_RETENTION_HOURS` after `last_activity_at` (default: 72 hours).
+- **AI-only sessions**: expire `CHAT_SESSION_TTL_MINUTES` after `last_activity_at` (default: 45 min).
+- **Handoff sessions**: expire `CHAT_HANDOFF_RETENTION_HOURS` after `last_activity_at` (default: 24 hours).
 - **Reconnect after TTL**: the server sends an `expired` WebSocket frame with clinic phone number and hours; the session is not revived. The client must start a new session.
-- **Expired session cleanup**: the sweeper deletes `chat_sessions` rows where `expires_at < now()` and cascades to associated `inbox_messages` rows (via application-level cleanup, as FK is nullable).
+- **Expired session cleanup**: the sweeper deletes the session's `inbox_messages`, marks `chat_sessions.status = 'expired'` and resets `last_seq` (the row is retained so a reconnect receives the `expired` frame); open `handover_sessions` resolve as `expired`, and the Telegram forum topic closes if a provider thread exists.
 
 ---
 
